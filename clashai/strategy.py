@@ -13,16 +13,18 @@ STATS = Path(__file__).resolve().parents[1] / "runs/strategy_stats.json"
 # Paramètres réglables du cerveau et leurs plages
 SPACE = {
     "giant_elixir": [7, 8, 9, 10],          # élixir minimum pour lancer le Géant
-    "giant_spot": ["back", "bridge"],       # Géant au fond (pousse lente) ou au pont (pression)
+    "giant_spot": ["back", "mid", "bridge"],   # Géant au fond (grosse poussée), au milieu, ou au pont (pression)
     "support_min_elixir": [3, 4, 5],        # soutien derrière le Géant dès que…
     "arrows_min": [2, 3, 4],                # taille de groupe minimale pour Flèches
     "fireball_min": [1, 2, 3],              # … pour Boule de feu (1 = accepte une grosse cible seule)
     "defend_line": [0.0, 0.05, 0.10],       # on défend quand l'ennemi est à cette distance au-delà de la rivière
     "counter_push": [False, True],          # après une défense réussie, relancer dans le même couloir
     "cycle_at": [9.0, 9.5, 10.0],           # élixir plein : on fait tourner une carte à partir de…
+    "punish_low_elixir": [False, True],     # attaquer dès que l'élixir estimé de l'ennemi est bas
 }
 DEFAULT = {"giant_elixir": 9, "giant_spot": "back", "support_min_elixir": 4, "arrows_min": 3,
-           "fireball_min": 2, "defend_line": 0.06, "counter_push": False, "cycle_at": 9.5}
+           "fireball_min": 2, "defend_line": 0.06, "counter_push": False, "cycle_at": 9.5,
+           "punish_low_elixir": False}
 
 
 def _key(p: dict) -> str:
@@ -41,9 +43,9 @@ def save(stats: dict) -> None:
 
 
 def mutate(p: dict) -> dict:
-    q = dict(p)
+    q = dict(DEFAULT, **p)
     for k in random.sample(list(SPACE), k=random.choice([1, 2])):
-        q[k] = random.choice([v for v in SPACE[k] if v != p[k]])
+        q[k] = random.choice([v for v in SPACE[k] if v != q[k]])
     return q
 
 

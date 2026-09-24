@@ -13,6 +13,7 @@ from clashai import hand as H
 from clashai.actions import play_card
 from clashai.brain import Brain
 from clashai.detect import Detector, draw
+from clashai.opponent import Opponent
 
 
 def _ascii(s: str) -> str:
@@ -22,6 +23,7 @@ def _ascii(s: str) -> str:
 class Agent:
     def __init__(self, out: str = "runs/games"):
         self.det, self.brain, self.out = Detector(track=True), Brain(), out
+        self.opp, self.opp_log = Opponent(), []
         os.makedirs(out, exist_ok=True)
 
     def think(self, img, now, fps):
@@ -31,8 +33,12 @@ class Agent:
         hand = H.read_hand(img, min_score=0.45)
         ready = [B.card_ready(img, s) for s in range(4)]
         el = B.read_elixir(img)
+        new = self.opp.update(units, now, img.shape[0])
+        for c in new:
+            self.opp_log.append({"t": round(now, 2), "card": c, "elixir_after": round(self.opp.elixir, 1)})
+        self.brain.opp_elixir = self.opp.elixir
         d = self.brain.decide(seen, hand, ready, el, now)
-        info = [f"elixir {el:.1f}  main : " + ", ".join(c or "?" for c in hand)]
+        info = [f"elixir {el:.1f}  main : " + ", ".join(c or "?" for c in hand)] + self.opp.summary()
         return units, d, info, hand, el
 
     def annotate(self, img, units, d, info):
@@ -53,6 +59,7 @@ class Agent:
     def play_battle(self, dev, game_id: str, params: dict | None = None) -> dict:
         """Joue un combat jusqu'au bout avec la variante de stratégie `params`."""
         self.brain = Brain(params)
+        self.opp, self.opp_log = Opponent(), []
         folder = os.path.join(self.out, game_id)
         os.makedirs(folder, exist_ok=True)
         self.det.tracker.reset() if self.det.tracker is not None else None
@@ -85,4 +92,7 @@ class Agent:
         with open(os.path.join(folder, "decisions.jsonl"), "w") as f:
             for row in log:
                 f.write(json.dumps(row, default=str) + "\n")
-        return {"game": game_id, "played": n, "refused": refused, "params": self.brain.p}
+        with open(os.path.join(folder, "opponent.json"), "w") as f:
+            json.dump({"played": self.opp_log, "deck": self.opp.deck}, f, indent=1)
+        return {"game": game_id, "played": n, "refused": refused, "params": self.brain.p,
+                "enemy_deck": self.opp.deck}

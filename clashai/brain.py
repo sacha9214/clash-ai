@@ -71,6 +71,7 @@ class Brain:
         self.giant_lane: int | None = None
         self.giant_time = -1e9
         self.last_defense_lane: int | None = None
+        self.opp_elixir = 5.0        # estimation fournie par le modèle de l'adversaire
 
     # ---- perception -> monde simplifié ----
     @staticmethod
@@ -163,14 +164,20 @@ class Brain:
         return None
 
     def _attack(self, seen: list[Seen], playable: dict, elixir: float, now: float) -> Decision | None:
-        if "giant" in playable and elixir >= self.p["giant_elixir"]:
+        # punir : l'adversaire vient de dépenser, il ne peut pas bien défendre tout de suite
+        punish = self.p.get("punish_low_elixir") and self.opp_elixir < 3 and elixir >= 5
+        if "giant" in playable and (elixir >= self.p["giant_elixir"] or punish):
             lane = self._weak_lane(seen)
             if self.p["counter_push"] and self.last_defense_lane is not None:
                 lane = self.last_defense_lane      # contre-attaque avec les survivants de la défense
             self.giant_lane, self.giant_time = lane, now
-            back = self.p["giant_spot"] == "back"
-            x, y = _clamp_own(LANES_X[lane], 0.69 if back else 0.47)
-            return Decision("giant", playable["giant"], x, y, f"attaque : Géant {'au fond' if back else 'au pont'}")
+            spot = self.p["giant_spot"]
+            back = spot == "back"
+            x, y = _clamp_own(LANES_X[lane], {"back": 0.69, "mid": 0.55, "bridge": 0.47}.get(spot, 0.69))
+            why = "l'ennemi est à sec" if punish and elixir < self.p["giant_elixir"] else {"back": "au fond", "mid": "au milieu", "bridge": "au pont"}.get(spot, spot)
+            if punish and elixir < self.p["giant_elixir"]:
+                x, y = _clamp_own(LANES_X[lane], 0.47)   # pression immédiate au pont
+            return Decision("giant", playable["giant"], x, y, f"attaque : Géant ({why})")
         # soutien derrière notre Géant pendant qu'il avance
         ours = [s for s in seen if not s.enemy and s.name == "giant"]
         if ours and elixir >= self.p["support_min_elixir"]:
