@@ -62,13 +62,18 @@ def is_chest(img):
 
 
 def result_of(img):
-    """Victoire si le bandeau « Winner! » (turquoise) est au-dessus de NOTRE nom (bas)."""
+    """Compare les couronnes dorées : les nôtres (bandeau bleu, bas) et les siennes (bandeau rouge, haut)."""
     h, w = img.shape[:2]
-    def cyan(y0, y1):
-        band = img[int(y0 * h):int(y1 * h), int(0.25 * w):int(0.75 * w)].reshape(-1, 3).astype(int)
-        return ((band[:, 0] > 200) & (band[:, 1] > 200) & (band[:, 2] < 140)).mean()
-    low, high = cyan(0.40, 0.44), cyan(0.10, 0.16)
-    return "win" if low > high and low > 0.02 else "loss" if high > 0.02 else "?"
+
+    def gold(y0, y1):
+        band = img[int(y0 * h):int(y1 * h), int(0.12 * w):int(0.88 * w)].reshape(-1, 3).astype(int)
+        b, g, r = band[:, 0], band[:, 1], band[:, 2]
+        return ((r > 200) & (g > 140) & (b < 90) & (r - b > 130)).mean()
+
+    ours, theirs = gold(0.44, 0.55), gold(0.17, 0.32)
+    if max(ours, theirs) < 0.01:
+        return "draw"
+    return "win" if ours > theirs else "loss"
 
 
 ap = argparse.ArgumentParser()
