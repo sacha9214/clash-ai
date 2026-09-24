@@ -28,9 +28,21 @@ def select_card(d: Device, slot: int, timeout: float = 0.3) -> float | None:
     return None
 
 
-def play_card(d: Device, slot: int, target: tuple[int, int]) -> bool:
-    """Sélectionne la carte (vérifié) puis la pose en `target`. Faux si la carte n'a pas réagi."""
+def play_card(d: Device, slot: int, target: tuple[int, int], timeout: float = 0.7) -> bool:
+    """Sélectionne la carte (vérifié), la pose en `target`, puis vérifie qu'elle est
+    vraiment partie. Si le jeu refuse (endroit interdit, élixir), la carte reste
+    soulevée : on la désélectionne pour ne pas laisser le jeu dans un état bancal."""
     if select_card(d, slot) is None:
         return False
+    time.sleep(0.05)                       # fin de l'animation de soulèvement
+    img, _, n = d.frame()
+    lifted = _card_patch(img, slot)
     d.tap(*target, hold=0.0)
-    return True
+    t0 = time.perf_counter()
+    while time.perf_counter() - t0 < timeout:
+        d.wait_frame(timeout=0.1, after=n)
+        img, _, n = d.frame()
+        if np.abs(_card_patch(img, slot) - lifted).mean() > 15:   # la carte a quitté la main
+            return True
+    d.tap(*B.px(img, B.CARD_X[slot], B.CARD_Y), hold=0.0)   # refusée : désélectionner
+    return False
