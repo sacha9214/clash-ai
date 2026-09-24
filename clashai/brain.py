@@ -116,6 +116,11 @@ class Brain:
         threats = [t for t in threats if t.name in TANK_UNITS or
                    sum(math.hypot(o.x - t.x, o.y - t.y) < 0.15 for o in ours) <
                    sum(math.hypot(e.x - t.x, e.y - t.y) < 0.15 for e in threats)]
+        if self.p.get("ignore_small"):
+            # 1-2 petites unités (gobelin, squelette…) : les tours s'en chargent, on garde l'élixir
+            small = [t for t in threats if t.name in SWARM_UNITS]
+            if len(small) == len(threats) and len(small) <= 2:
+                threats = []
         if threats:
             d = self._defend(threats, playable)
             if d:
