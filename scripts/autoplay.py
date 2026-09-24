@@ -85,9 +85,9 @@ journal = os.path.join(a.out, "journal.jsonl")
 
 with Device() as dev:
     played, unknown_since, chest_until = 0, None, 0.0
-    while played < a.games:
+    while True:   # on ne sort qu'à l'accueil (après coffres et récompenses du dernier combat)
         img, _, _ = dev.frame()
-        if B.in_battle(img):
+        if B.in_battle(img) and played < a.games:
             gid = time.strftime("%Y%m%d-%H%M%S")
             print(f"[{gid}] combat {played + 1}/{a.games}", flush=True)
             stats = ST.load()
