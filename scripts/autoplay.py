@@ -32,7 +32,7 @@ def color_at(img, fx, fy, r=6):
 
 def is_home(img):
     b, g, r = color_at(img, 0.372, 0.797)       # coin du bouton Battle (hors texte)
-    return r > 200 and g > 150 and b < 90        # jaune
+    return r > 120 and g > 80 and b < 70 and r > g   # jaune (même assombri par un tutoriel)
 
 
 def is_blue_btn(img, fx, fy):
@@ -126,6 +126,12 @@ with Device() as dev:
             unknown_since = None
         else:
             unknown_since = unknown_since or time.time()
+            # Route des trophées / nouvelle arène : bouton OK tout en bas. Sans risque ailleurs
+            # (sur l'accueil c'est la barre d'onglets). On l'essaie toutes les 10 s.
+            waited = time.time() - unknown_since
+            if waited > 10 and int(waited) % 10 == 0:
+                dev.tap(*B.px(img, 0.5, 0.966))
+                time.sleep(1.0)
             if time.time() - unknown_since > 45:   # matchmaking dure rarement plus
                 cv2.imwrite(os.path.join(a.out, "unknown.jpg"), img)
                 print("écran inconnu depuis 45 s : arrêt (voir unknown.jpg)", flush=True)
