@@ -12,6 +12,7 @@ while [ ! -f runs/games/STOP ]; do
     sleep 60; continue
   fi
   fails=0
+  $PY scripts/claim.py >> runs/night.log 2>&1
   $PY scripts/upgrade.py >> runs/night.log 2>&1
 done
 echo "$(date) nuit terminée" >> runs/night.log

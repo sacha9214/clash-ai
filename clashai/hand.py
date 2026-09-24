@@ -23,8 +23,13 @@ def _feat(crop: np.ndarray) -> np.ndarray:
     return g.ravel() / np.sqrt(g.size)
 
 
-_FEATS = np.stack([_feat(im) for im in _T["images"]])
-_LABELS = _T["labels"]
+from clashai.cards import DECK  # noqa: E402
+
+# seulement les cartes du deck actuel (+ emplacement vide) : une ancienne carte retirée
+# du deck ne doit pas « capter » la nouvelle
+_KEEP = [i for i, l in enumerate(_T["labels"]) if str(l) in DECK or str(l) == "empty"]
+_FEATS = np.stack([_feat(_T["images"][i]) for i in _KEEP])
+_LABELS = _T["labels"][_KEEP]
 
 
 def card_crop(img: np.ndarray, slot: int) -> np.ndarray:
