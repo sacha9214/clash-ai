@@ -3,3 +3,6 @@ runs/
 py-clash-bot/
 __pycache__/
 *.pt
+third_party/
+data/
+models/
