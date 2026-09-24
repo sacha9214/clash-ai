@@ -21,10 +21,11 @@ SPACE = {
     "counter_push": [False, True],          # après une défense réussie, relancer dans le même couloir
     "cycle_at": [9.0, 9.5, 10.0],           # élixir plein : on fait tourner une carte à partir de…
     "punish_low_elixir": [False, True],     # attaquer dès que l'élixir estimé de l'ennemi est bas
+    "fireball_spawners": [False, True],     # Boule de feu sur les bâtiments qui produisent des unités
 }
 DEFAULT = {"giant_elixir": 9, "giant_spot": "back", "support_min_elixir": 4, "arrows_min": 3,
            "fireball_min": 2, "defend_line": 0.06, "counter_push": False, "cycle_at": 9.5,
-           "punish_low_elixir": False}
+           "punish_low_elixir": False, "fireball_spawners": False}
 
 
 def _key(p: dict) -> str:

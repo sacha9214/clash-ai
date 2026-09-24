@@ -12,6 +12,8 @@ import math
 from dataclasses import dataclass
 
 from clashai.cards import AIR_UNITS, BUILDINGS, DECK, NOT_UNITS, SWARM_UNITS, TANK_UNITS
+
+SPAWNERS = {"goblin-hut", "tombstone", "barbarian-hut", "furnace", "goblin-cage", "elixir-collector"}
 from clashai.detect import Unit
 
 # Géométrie de l'arène (mesurée sur l'écran du REDMAGIC, flux 578x1280)
@@ -78,6 +80,9 @@ class Brain:
     def to_seen(units: list[Unit], w: int, h: int, trails: dict | None, fps: float) -> list[Seen]:
         out = []
         for u in units:
+            if u.name in SPAWNERS and u.enemy:
+                out.append(Seen(u.name, True, (u.box[0] + u.box[2]) / 2 / w, (u.box[1] + u.box[3]) / 2 / h))
+                continue
             if u.name in BUILDINGS or u.name in NOT_UNITS:
                 continue
             x, y = (u.box[0] + u.box[2]) / 2 / w, u.box[3] / h
@@ -97,9 +102,15 @@ class Brain:
         enemies = [s for s in seen if s.enemy]
         threats = [s for s in enemies if s.y > RIVER_Y - self.p['defend_line']]   # sur notre moitié ou au pont
 
-        d = self._spells(enemies, playable)
+        d = self._spells([e for e in enemies if e.name not in SPAWNERS], playable)
         if d:
             return d
+        # bâtiment qui produit des unités sans arrêt : une Boule de feu le rentabilise
+        spawners = [e for e in enemies if e.name in SPAWNERS]
+        if spawners and self.p.get("fireball_spawners") and "fireball" in playable and elixir >= 7:
+            t = spawners[0]
+            return Decision("fireball", playable["fireball"], t.x, t.y, f"fireball sur {t.name}")
+        enemies = [e for e in enemies if e.name not in SPAWNERS]
         # ne pas surinvestir : une menace déjà couverte par nos unités est ignorée (sauf un tank)
         ours = [s for s in seen if not s.enemy]
         threats = [t for t in threats if t.name in TANK_UNITS or
