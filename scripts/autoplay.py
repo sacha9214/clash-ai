@@ -35,9 +35,21 @@ def is_home(img):
     return r > 200 and g > 150 and b < 90        # jaune
 
 
+def is_blue_btn(img, fx, fy):
+    b, g, r = color_at(img, fx, fy)
+    return b > 200 and g > 120 and r < 120
+
+
+def end_ok(img):
+    """Position du bouton OK bleu de fin de combat (seul au centre, ou à droite de « Play Again »)."""
+    for fx, fy in ((0.40, 0.828), (0.60, 0.828)):
+        if is_blue_btn(img, fx, fy):
+            return (0.5 if fx == 0.40 else 0.655), 0.825
+    return None
+
+
 def is_end(img):
-    b, g, r = color_at(img, 0.40, 0.828)        # bouton OK
-    return b > 200 and g > 120 and r < 120       # bouton OK bleu
+    return end_ok(img) is not None
 
 
 def is_chest(img):
@@ -87,7 +99,7 @@ with Device() as dev:
             played += 1
             unknown_since = None
         elif is_end(img):
-            dev.tap(*B.px(img, *BATTLE_BTN))
+            dev.tap(*B.px(img, *end_ok(img)))
             time.sleep(3)
             # Juste après un combat : écrans d'ouverture de coffre / récompenses.
             # On tape au centre (seulement dans ce contexte, borné) jusqu'au retour à l'accueil.
