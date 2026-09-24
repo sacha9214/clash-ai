@@ -1,0 +1,5 @@
+.venv/
+runs/
+py-clash-bot/
+__pycache__/
+*.pt
