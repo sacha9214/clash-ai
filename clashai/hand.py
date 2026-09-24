@@ -46,3 +46,19 @@ def read_hand(img: np.ndarray, min_score: float = 0.55) -> list[str | None]:
         name, score = identify(card_crop(img, slot))
         out.append(name if score >= min_score and name != "empty" else None)
     return out
+
+
+def known_cards() -> set[str]:
+    return set(str(x) for x in _LABELS)
+
+
+def learn(crop: np.ndarray, name: str) -> None:
+    """Ajoute un exemple (carte nouvellement mise dans le deck) et l'enregistre."""
+    global _FEATS, _LABELS
+    img = cv2.resize(crop, SIZE)
+    _FEATS = np.vstack([_FEATS, _feat(img)[None]])
+    _LABELS = np.append(_LABELS, name)
+    path = Path(__file__).resolve().parents[1] / "assets/card_templates.npz"
+    old = np.load(path)
+    np.savez_compressed(path, images=np.concatenate([old["images"], img[None]]),
+                        labels=np.append(old["labels"], name))

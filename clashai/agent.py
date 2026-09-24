@@ -32,6 +32,8 @@ class Agent:
         seen = Brain.to_seen(units, w, h, self.det.trails, fps)
         hand = H.read_hand(img, min_score=0.45)
         ready = [B.card_ready(img, s) for s in range(4)]
+        self._learn_new_card(img, hand, ready)
+        hand = H.read_hand(img, min_score=0.45)
         el = B.read_elixir(img)
         new = self.opp.update(units, now, img.shape[0])
         for c in new:
@@ -40,6 +42,28 @@ class Agent:
         d = self.brain.decide(seen, hand, ready, el, now)
         info = [f"elixir {el:.1f}  main : " + ", ".join(c or "?" for c in hand)] + self.opp.summary()
         return units, d, info, hand, el
+
+    def _learn_new_card(self, img, hand, ready):
+        """Une carte du deck sans exemple (nouvelle dans le deck) : quand un emplacement
+        en couleur reste illisible 3 images de suite, c'est elle -> on l'apprend."""
+        from clashai.cards import DECK
+        missing = [c for c in DECK if c not in H.known_cards()]
+        if len(missing) != 1:
+            return
+        streak = getattr(self, "_unknown_streak", {})
+        for slot in range(4):
+            crop = H.card_crop(img, slot)
+            name, score = H.identify(crop)
+            if hand[slot] is None and ready[slot] and score < 0.45:
+                streak[slot] = streak.get(slot, 0) + 1
+                if streak[slot] >= 3:
+                    H.learn(crop, missing[0])
+                    print(f"   carte apprise : {missing[0]} (score {score:.2f})", flush=True)
+                    streak.clear()
+                    break
+            else:
+                streak[slot] = 0
+        self._unknown_streak = streak
 
     def annotate(self, img, units, d, info):
         v = img.copy()

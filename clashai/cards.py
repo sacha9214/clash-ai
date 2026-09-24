@@ -26,9 +26,15 @@ DECK = {c.name: c for c in [
     Card("mini-pekka", 4, "troop", role="dps", units=("mini-pekka",)),
     Card("musketeer", 4, "troop", "air+ground", role="dps", units=("musketeer",)),
     Card("archers", 3, "troop", "air+ground", role="dps", units=("archer",)),
-    Card("minions", 3, "troop", "air+ground", flying=True, role="swarm", units=("minion",)),
+    Card("valkyrie", 4, "troop", role="splash", units=("valkyrie",)),
     Card("arrows", 3, "spell", "air+ground", role="spell-small", radius=0.14),
     Card("fireball", 4, "spell", "air+ground", role="spell-big", radius=0.11),
+]}
+
+# Cartes connues hors deck (utile si on les remet)
+BENCH = {c.name: c for c in [
+    Card("minions", 3, "troop", "air+ground", flying=True, role="swarm", units=("minion",)),
+    Card("spear-goblins", 2, "troop", "air+ground", role="swarm", units=("spear-goblin",)),
 ]}
 
 # Unités ennemies : ce qui compte pour choisir une réponse (valeurs approximatives)

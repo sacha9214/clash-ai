@@ -98,7 +98,7 @@ class Brain:
     # ---- décision ----
     def decide(self, seen: list[Seen], hand: list[str | None], ready: list[bool], elixir: float,
                now: float) -> Decision | None:
-        playable = {c: i for i, c in enumerate(hand) if c and ready[i] and DECK[c].cost <= elixir + 0.3}
+        playable = {c: i for i, c in enumerate(hand) if c in DECK and ready[i] and DECK[c].cost <= elixir + 0.3}
         enemies = [s for s in seen if s.enemy]
         threats = [s for s in enemies if s.y > RIVER_Y - self.p['defend_line']]   # sur notre moitié ou au pont
 
@@ -155,12 +155,15 @@ class Brain:
         t = max(threats, key=lambda s: s.y)
         lane_x = LANES_X[_lane(t.x)]
         is_air, is_tank = t.name in AIR_UNITS, t.name in TANK_UNITS
+        swarm = sum(1 for s in threats if s.name in SWARM_UNITS and math.hypot(s.x - t.x, s.y - t.y) < 0.15)
         if is_air:
-            order = ["musketeer", "archers", "minions"]
+            order = ["musketeer", "archers", "minions", "spear-goblins"]
         elif is_tank:
-            order = ["mini-pekka", "musketeer", "knight", "minions", "archers"]
+            order = ["mini-pekka", "musketeer", "knight", "valkyrie", "minions", "archers"]
+        elif swarm >= 2:
+            order = ["valkyrie", "knight", "musketeer", "archers", "mini-pekka"]   # dégâts de zone
         else:
-            order = ["knight", "mini-pekka", "musketeer", "archers", "minions"]
+            order = ["knight", "valkyrie", "mini-pekka", "musketeer", "archers", "minions"]
         for card in order:
             if card not in playable:
                 continue
@@ -198,7 +201,7 @@ class Brain:
         ours = [s for s in seen if not s.enemy and s.name == "giant"]
         if ours and elixir >= self.p["support_min_elixir"]:
             g = ours[0]
-            for card in ("musketeer", "archers", "mini-pekka", "minions"):
+            for card in ("musketeer", "archers", "valkyrie", "mini-pekka", "minions"):
                 if card in playable:
                     x, y = _clamp_own(g.x, g.y + 0.07)
                     return Decision(card, playable[card], x, y, f"soutien : {card} derrière le Géant")

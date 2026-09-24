@@ -103,9 +103,26 @@ def try_upgrade(d, card_xy, label):
     return True
 
 
+def on_deck(img):
+    """Écran « Battle Deck » : bandeau bleu vif en haut (y≈175)."""
+    p = np.vstack([region(img, 250, 200, 20, 3), region(img, 430, 150, 20, 3)])
+    return ((p[:, 0] > 180) & (p[:, 2] < 90)).mean() > 0.4
+
+
 with Device() as d:
     d.tap(*NAV_CARDS)
-    shot(d, "deck")
+    img = shot(d, "deck")
+    if not on_deck(img):
+        # un tutoriel (« Special Offer ») bloque l'onglet : passer par la boutique, SANS rien toucher
+        # d'autre, puis l'onglet Cartes (décalé quand la boutique est ouverte)
+        d.tap(50, 1222)
+        shot(d)
+        d.tap(234, 1224)
+        img = shot(d, "deck")
+    if not on_deck(img):
+        print("écran des cartes introuvable : pas d'amélioration", flush=True)
+        d.tap(*NAV_BATTLE)
+        sys.exit(0)
     done = 0
     for i, xy in enumerate(DECK):
         for _ in range(3):                            # plusieurs niveaux d'affilée si possible
