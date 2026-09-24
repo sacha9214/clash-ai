@@ -49,7 +49,7 @@ def mutate(p: dict) -> dict:
     return q
 
 
-def choose(stats: dict, explore: float = 0.25) -> dict:
+def choose(stats: dict, explore: float = 0.45) -> dict:
     """Thompson : tirer une proba de victoire Beta(v+1, d+1) par variante, prendre la meilleure.
     Parfois (explore) : nouvelle variante, mutation de la meilleure actuelle."""
     draws = {k: random.betavariate(v["wins"] + 1, v["losses"] + 1) for k, v in stats.items()}
