@@ -65,9 +65,12 @@ def _lane(x: float) -> int:
 
 
 class Brain:
-    def __init__(self):
+    def __init__(self, params: dict | None = None):
+        from clashai.strategy import DEFAULT
+        self.p = dict(DEFAULT, **(params or {}))
         self.giant_lane: int | None = None
         self.giant_time = -1e9
+        self.last_defense_lane: int | None = None
 
     # ---- perception -> monde simplifié ----
     @staticmethod
@@ -91,7 +94,7 @@ class Brain:
                now: float) -> Decision | None:
         playable = {c: i for i, c in enumerate(hand) if c and ready[i] and DECK[c].cost <= elixir + 0.3}
         enemies = [s for s in seen if s.enemy]
-        threats = [s for s in enemies if s.y > RIVER_Y - 0.06]   # sur notre moitié ou au pont
+        threats = [s for s in enemies if s.y > RIVER_Y - self.p['defend_line']]   # sur notre moitié ou au pont
 
         d = self._spells(enemies, playable)
         if d:
@@ -102,11 +105,15 @@ class Brain:
                    sum(math.hypot(o.x - t.x, o.y - t.y) < 0.15 for o in ours) <
                    sum(math.hypot(e.x - t.x, e.y - t.y) < 0.15 for e in threats)]
         if threats:
-            return self._defend(threats, playable)
+            d = self._defend(threats, playable)
+            if d:
+                self.last_defense_lane = _lane(d.x)
+            return d
         return self._attack(seen, playable, elixir, now)
 
     def _spells(self, enemies: list[Seen], playable: dict) -> Decision | None:
-        for card, min_count, kinds in (("arrows", 3, SWARM_UNITS), ("fireball", 2, None)):
+        for card, min_count, kinds in (("arrows", self.p["arrows_min"], SWARM_UNITS),
+                                       ("fireball", self.p["fireball_min"], None)):
             if card not in playable:
                 continue
             pool = [e for e in enemies if kinds is None or e.name in kinds]
@@ -120,7 +127,9 @@ class Brain:
                     best = len(group)
                     center = (sum(o.x + o.vx * SPELL_LEAD_S for o in group) / len(group),
                               sum(o.y + o.vy * SPELL_LEAD_S for o in group) / len(group))
-            if best >= min_count:
+            if best >= min_count and (best >= 2 or card != "fireball" or
+                                      any(e.name in TANK_UNITS or e.name in ("musketeer", "wizard", "witch",
+                                          "executioner", "princess", "dart-goblin") for e in pool)):
                 return Decision(card, playable[card], *center, f"{card} sur un groupe de {best}")
         return None
 
@@ -154,20 +163,23 @@ class Brain:
         return None
 
     def _attack(self, seen: list[Seen], playable: dict, elixir: float, now: float) -> Decision | None:
-        if "giant" in playable and elixir >= 9:
+        if "giant" in playable and elixir >= self.p["giant_elixir"]:
             lane = self._weak_lane(seen)
+            if self.p["counter_push"] and self.last_defense_lane is not None:
+                lane = self.last_defense_lane      # contre-attaque avec les survivants de la défense
             self.giant_lane, self.giant_time = lane, now
-            x, y = _clamp_own(LANES_X[lane], 0.69)   # au fond : le temps de réunir de l'élixir derrière
-            return Decision("giant", playable["giant"], x, y, "attaque : Géant au fond")
+            back = self.p["giant_spot"] == "back"
+            x, y = _clamp_own(LANES_X[lane], 0.69 if back else 0.47)
+            return Decision("giant", playable["giant"], x, y, f"attaque : Géant {'au fond' if back else 'au pont'}")
         # soutien derrière notre Géant pendant qu'il avance
         ours = [s for s in seen if not s.enemy and s.name == "giant"]
-        if ours and elixir >= 4:
+        if ours and elixir >= self.p["support_min_elixir"]:
             g = ours[0]
             for card in ("musketeer", "archers", "mini-pekka", "minions"):
                 if card in playable:
                     x, y = _clamp_own(g.x, g.y + 0.07)
                     return Decision(card, playable[card], x, y, f"soutien : {card} derrière le Géant")
-        if elixir >= 9.5 and playable:
+        if elixir >= self.p["cycle_at"] and playable:
             # élixir plein et rien à faire : on fait tourner la carte la moins chère, sans risque
             card = min((c for c in playable if DECK[c].kind == "troop"), key=lambda c: DECK[c].cost, default=None)
             if card:

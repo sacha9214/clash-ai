@@ -39,7 +39,12 @@ def in_battle(img: np.ndarray) -> bool:
     y = int(ELIXIR_Y * h)
     row = img[y - 1:y + 2, int(ELIXIR_X[0] * w):int(ELIXIR_X[1] * w)].reshape(-1, 3).astype(int)
     b, g = row[:, 0], row[:, 1]
-    return ((b > 90) & (g < 100)).mean() > 0.8
+    if ((b > 90) & (g < 100)).mean() < 0.8:
+        return False
+    # + la goutte d'élixir magenta au début de la barre (un fond bleu seul ne suffit pas :
+    # l'écran d'ouverture de coffre est bleu aussi)
+    drop = img[y - 2:y + 3, int(0.25 * w):int(0.27 * w)].reshape(-1, 3).astype(int).mean(0)
+    return drop[0] > 150 and drop[2] > 150 and drop[1] < 90
 
 
 def read_elixir(img: np.ndarray) -> float:
