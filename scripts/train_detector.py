@@ -15,7 +15,12 @@ ROOT = Path(__file__).resolve().parents[1]
 KATACR = ROOT / "third_party/KataCR"
 sys.path.insert(0, str(KATACR))
 os.chdir(KATACR)   # leurs chemins de config sont relatifs à la racine KataCR
+# ultralytics 8.1 charge ses .pt par pickle complet ; torch >= 2.6 (requis pour les RTX 50xx) le refuse
+# par défaut. Modèles KataCR de confiance -> on garde l'ancien comportement.
+os.environ.setdefault("TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD", "1")
 
+import torch  # noqa: E402
+import yaml  # noqa: E402
 from ultralytics.cfg import get_cfg  # noqa: E402
 from katacr.yolov8.train import YOLO_CR  # noqa: E402
 
@@ -29,10 +34,18 @@ ap.add_argument("--hours", type=float, default=None, help="durée max d'entraîn
 ap.add_argument("--fraction", type=float, default=1.0, help="part des images de validation (tests rapides)")
 a = ap.parse_args()
 
+device = 0 if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+# data.yaml de KataCR avec un chemin absolu : on en écrit une copie qui pointe vers le dataset local
+data = yaml.safe_load(open(KATACR / "katacr/yolov8/detector1/data.yaml", encoding="utf-8"))
+data["path"] = str(ROOT / "data/Clash-Royale-Dataset/images/part2")
+data_yaml = ROOT / "runs/detector/data.yaml"
+data_yaml.parent.mkdir(parents=True, exist_ok=True)
+yaml.safe_dump(data, open(data_yaml, "w", encoding="utf-8"), allow_unicode=True, sort_keys=False)
+
 cfg = dict(get_cfg("./katacr/yolov8/ClashRoyale.yaml"))
 cfg.update(
-    model=f"{a.model}.yaml", data=str(KATACR / "katacr/yolov8/detector1/data.yaml"),
-    epochs=a.epochs, batch=a.batch, workers=a.workers, device="mps", deterministic=False,
+    model=f"{a.model}.yaml", data=str(data_yaml),
+    epochs=a.epochs, batch=a.batch, workers=a.workers, device=device, deterministic=False,
     project=str(ROOT / "runs/detector"), name=a.name or f"{a.model}_single", exist_ok=True,
     fraction=a.fraction, patience=8, time=a.hours,
 )

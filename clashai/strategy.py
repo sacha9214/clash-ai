@@ -13,21 +13,26 @@ STATS = Path(__file__).resolve().parents[1] / "runs/strategy_stats.json"
 # Paramètres réglables du cerveau et leurs plages
 SPACE = {
     "giant_elixir": [7, 8, 9, 10],          # élixir minimum pour lancer le Géant
-    "giant_spot": ["back", "mid", "bridge"],   # Géant au fond (grosse poussée), au milieu, ou au pont (pression)
+    "giant_spot": ["back", "corner", "mid", "bridge"],   # Géant au fond, dans le coin (dur à attirer au centre), au milieu, au pont
     "support_min_elixir": [3, 4, 5],        # soutien derrière le Géant dès que…
     "arrows_min": [2, 3, 4],                # taille de groupe minimale pour Flèches
     "fireball_min": [1, 2, 3],              # … pour Boule de feu (1 = accepte une grosse cible seule)
     "defend_line": [0.0, 0.05, 0.10],       # on défend quand l'ennemi est à cette distance au-delà de la rivière
     "counter_push": [False, True],          # après une défense réussie, relancer dans le même couloir
-    "cycle_at": [9.0, 9.5, 10.0],           # élixir plein : on fait tourner une carte à partir de…
+    "cycle_at": [7.0, 8.0, 9.0, 9.5, 10.0],  # rien à faire : on fait tourner une carte au fond à partir de…
     "punish_low_elixir": [False, True],     # attaquer dès que l'élixir estimé de l'ennemi est bas
     "fireball_spawners": [False, True],     # Boule de feu sur les bâtiments qui produisent des unités
     "ignore_small": [False, True],          # laisser les tours gérer 1-2 petites unités
+    # règles tirées des vidéos de stratégie (2026-09-25), à valider en match :
+    "punish_opposite": [False, True],       # l'ennemi pose une carte lourde -> Mini P.E.K.K.A/Chevalier au pont, autre couloir
+    "giant_when_counter_out": [False, True],  # Géant plus tôt quand ses contres connus ne sont plus dans sa main
+    "fireball_patient": [False, True],      # Boule de feu sur cible seule : seulement si elle touche aussi une tour
 }
 DEFAULT = {"giant_elixir": 9, "giant_spot": "back", "support_min_elixir": 4, "arrows_min": 3,
            "fireball_min": 2, "defend_line": 0.06, "counter_push": False, "cycle_at": 9.5,
            "punish_low_elixir": False, "fireball_spawners": False,
-           "ignore_small": True}
+           "ignore_small": True, "punish_opposite": False, "giant_when_counter_out": False,
+           "fireball_patient": False}
 
 
 def _key(p: dict) -> str:

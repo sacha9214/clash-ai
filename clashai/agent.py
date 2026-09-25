@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import os
+import queue
+import threading
 import time
 import unicodedata
 
@@ -19,6 +21,24 @@ import numpy as np
 
 def _ascii(s: str) -> str:
     return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode()
+
+
+# Écriture des captures en arrière-plan : cv2.imwrite ne doit pas bloquer la boucle de combat
+_jobs: queue.Queue = queue.Queue()
+
+
+def _writer():
+    while True:
+        path, img = _jobs.get()
+        cv2.imwrite(path, img)
+        _jobs.task_done()
+
+
+threading.Thread(target=_writer, daemon=True).start()
+
+
+def _save(path: str, img) -> None:
+    _jobs.put((path, img))
 
 
 class Agent:
@@ -41,9 +61,27 @@ class Agent:
         for c in new:
             self.opp_log.append({"t": round(now, 2), "card": c, "elixir_after": round(self.opp.elixir, 1)})
         self.brain.opp_elixir = self.opp.elixir
+        self.brain.opp_hand, self.brain.opp_deck = self.opp.hand, self.opp.deck
+        costs = {card: cost for card, cost, _ in UNIT2CARD.values()}
+        if any(costs.get(c, 0) >= 6 for c in new):
+            self.brain.opp_heavy_t = now
         d = self.brain.decide(seen, hand, ready, el, now)
         info = [f"elixir {el:.1f}  main : " + ", ".join(c or "?" for c in hand)]
         return units, d, info, hand, el
+
+    def _show(self, img, units, d, info):
+        if self.show:
+            view = self.annotate(img, units, d, info)
+            cv2.imshow("Clash AI", cv2.resize(view, (int(view.shape[1] * 1.25), int(view.shape[0] * 1.25))))
+            cv2.waitKey(1)
+
+    def _observe(self, img, info):
+        """Pendant qu'une carte se pose : on continue de suivre les unités et d'afficher (pas de décision)."""
+        now = time.time()
+        units = self.det(img)
+        for c in self.opp.update(units, now, img.shape[0]):
+            self.opp_log.append({"t": round(now, 2), "card": c, "elixir_after": round(self.opp.elixir, 1)})
+        self._show(img, units, None, info)
 
     def _learn_new_card(self, img, hand, ready):
         """Une carte du deck sans exemple (nouvelle dans le deck) : quand un emplacement
@@ -108,28 +146,29 @@ class Agent:
             now = time.time()
             fps, t_prev = 1 / max(now - t_prev, 1e-3), now
             units, d, info, hand, el = self.think(img, now, fps)
-            if self.show:
-                view = self.annotate(img, units, d, info)
-                cv2.imshow("Clash AI", cv2.resize(view, (int(view.shape[1] * 1.25), int(view.shape[0] * 1.25))))
-                cv2.waitKey(1)
+            self._show(img, units, d, info)
             if now - getattr(self, "_last_snap", 0) > 5:
                 self._last_snap = now
-                cv2.imwrite(os.path.join(folder, f"state{int(now) % 100000:05d}.jpg"), self.annotate(img, units, None, info))
+                _save(os.path.join(folder, f"state{int(now) % 100000:05d}.jpg"), self.annotate(img, units, None, info))
             if d and now - last_play > 0.8:
                 h, w = img.shape[:2]
-                ok = play_card(dev, d.slot, (int(d.x * w), int(d.y * h)))
+                t_play = time.perf_counter()
+                ok = play_card(dev, d.slot, (int(d.x * w), int(d.y * h)),
+                               on_frame=lambda im: self._observe(im, info))
+                play_ms = round((time.perf_counter() - t_play) * 1000)
                 if ok and d.card in ("arrows", "fireball"):
                     self.opp.note_our_spell(time.time(), d.x * w, d.y * h)
-                log.append({"t": round(now, 2), "card": d.card, "x": round(d.x, 3), "y": round(d.y, 3),
-                            "reason": d.reason, "ok": ok, "elixir": el, "hand": hand,
+                log.append({"t": round(now, 2), "card": d.card, "x": round(d.x, 3), "y": round(d.y, 3), "tile": d.tile,
+                            "reason": d.reason, "ok": ok, "play_ms": play_ms, "elixir": el, "hand": hand,
                             "units": [(u.name, u.enemy, u.center) for u in units]})
                 if ok:
                     last_play = time.time()
-                    cv2.imwrite(os.path.join(folder, f"play{n:03d}.jpg"), self.annotate(img, units, d, info))
+                    _save(os.path.join(folder, f"play{n:03d}.jpg"), self.annotate(img, units, d, info))
                     n += 1
                 else:
                     refused += 1
                     last_play = time.time() - 0.4
+        _jobs.join()   # captures en attente écrites avant le résumé
         with open(os.path.join(folder, "decisions.jsonl"), "w") as f:
             for row in log:
                 f.write(json.dumps(row, default=str) + "\n")

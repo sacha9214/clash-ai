@@ -101,8 +101,13 @@ class Opponent:
                 if card in self.played[-4:]:
                     continue
                 if now - t_last > 1.5:
+                    quiet = now - max((t for t, _ in self.recent.values()), default=self.start) > 5
                     self.recent[card] = (now, 1)
                     _, cost, _ = next(v for v in UNIT2CARD.values() if v[0] == card)
+                    if cost >= 6 and quiet:
+                        # carte lourde après un temps mort : il attendait d'être plein pour ne rien perdre
+                        # -> point de recalage fiable de l'estimation (il avait ~10)
+                        self.elixir = MAX_ELIXIR
                     self.elixir = max(0.0, self.elixir - cost)
                     self.played.append(card)
                     new_cards.append(card)

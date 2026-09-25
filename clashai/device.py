@@ -7,7 +7,11 @@ intermédiaire, et on envoie les taps par la socket de contrôle déjà ouverte
 """
 from __future__ import annotations
 
+import glob
+
+import os
 import random
+import shutil
 import socket
 import struct
 import subprocess
@@ -17,7 +21,36 @@ import time
 import av
 import numpy as np
 
-SERVER_LOCAL = "/opt/homebrew/share/scrcpy/scrcpy-server"
+
+
+def _find_tool(env: str, names: tuple[str, ...], globs: tuple[str, ...]) -> str:
+    """Chemin d'un outil scrcpy/adb : variable d'env, puis PATH, puis emplacements connus (Mac/Linux/Windows)."""
+    if os.environ.get(env):
+        return os.environ[env]
+    for n in names:
+        w = shutil.which(n)
+        if w:
+            return w
+    for g in globs:
+        hits = sorted(glob.glob(os.path.expandvars(os.path.expanduser(g))))
+        if hits:
+            return hits[-1]
+    return names[0]
+
+
+_WINGET_SCRCPY = r"%LOCALAPPDATA%\Microsoft\WinGet\Packages\Genymobile.scrcpy_*\scrcpy-win64-v*"
+ADB = _find_tool("ADB", ("adb",), (_WINGET_SCRCPY + r"\adb.exe", r"%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe"))
+
+
+def _scrcpy_server() -> str:
+    scrcpy = shutil.which("scrcpy")
+    near = (os.path.join(os.path.dirname(os.path.realpath(scrcpy)), "scrcpy-server"),) if scrcpy else ()
+    return _find_tool("SCRCPY_SERVER_PATH", (), (*near, _WINGET_SCRCPY + r"\scrcpy-server",
+                      "/opt/homebrew/share/scrcpy/scrcpy-server", "/usr/local/share/scrcpy/scrcpy-server",
+                      "/usr/share/scrcpy/scrcpy-server"))
+
+
+SERVER_LOCAL = _scrcpy_server()
 SERVER_REMOTE = "/data/local/tmp/scrcpy-server.jar"
 SERVER_VERSION = "4.1"
 
@@ -27,11 +60,11 @@ MSG_INJECT_TOUCH = 2
 
 
 def _adb(serial: str, *args: str, **kw) -> subprocess.CompletedProcess:
-    return subprocess.run(["adb", "-s", serial, *args], capture_output=True, text=True, **kw)
+    return subprocess.run([ADB, "-s", serial, *args], capture_output=True, text=True, **kw)
 
 
 def first_usb_device() -> str:
-    out = subprocess.run(["adb", "devices"], capture_output=True, text=True).stdout
+    out = subprocess.run([ADB, "devices"], capture_output=True, text=True).stdout
     for line in out.splitlines()[1:]:
         parts = line.split()
         if len(parts) == 2 and parts[1] == "device" and ":" not in parts[0] and not parts[0].startswith("emulator"):
@@ -76,7 +109,7 @@ class Device:
             f"video_bit_rate={self.bit_rate}", "stay_awake=true", "clipboard_autosync=false",
             "cleanup=true",
         ]
-        cmd = ["adb", "-s", self.serial, "shell", f"CLASSPATH={SERVER_REMOTE}", "app_process", "/",
+        cmd = [ADB, "-s", self.serial, "shell", f"CLASSPATH={SERVER_REMOTE}", "app_process", "/",
                "com.genymobile.scrcpy.Server", SERVER_VERSION, *args]
         self._proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 

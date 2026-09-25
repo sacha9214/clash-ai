@@ -10,6 +10,7 @@ l'entraînement, puis les boîtes sont replacées dans les coordonnées du flux.
 from __future__ import annotations
 
 import collections
+import os
 import sys
 import time
 from dataclasses import dataclass
@@ -20,6 +21,9 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "third_party/KataCR"))
+# ultralytics 8.1 charge ses .pt par pickle complet ; torch >= 2.6 (requis pour les RTX 50xx) le refuse
+# par défaut. Modèles KataCR de confiance -> on garde l'ancien comportement.
+os.environ.setdefault("TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD", "1")
 
 import torch  # noqa: E402
 import torchvision  # noqa: E402
@@ -55,7 +59,7 @@ class Unit:
 
 class Detector:
     def __init__(self, device: str | None = None, track: bool = True, conf: float = 0.5, iou: float = 0.6):
-        self.device = device or ("mps" if torch.backends.mps.is_available() else "cpu")
+        self.device = device or ("cuda:0" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
         self.half = self.device != "cpu"
         self.models = [YOLO_CR(str(p)) for p in DETECTORS]
         self.iou = iou
@@ -75,7 +79,12 @@ class Detector:
         return crop, (x0, y0, (x1 - x0) / ARENA_SIZE[0], (y1 - y0) / ARENA_SIZE[1])
 
     def __call__(self, frame: np.ndarray) -> list[Unit]:
-        crop, (ox, oy, sx, sy) = self._crop(frame)
+        crop, offset = self._crop(frame)
+        return self.on_arena(crop, offset)
+
+    def on_arena(self, crop: np.ndarray, offset=(0, 0, 1.0, 1.0)) -> list[Unit]:
+        """Détecte sur une arène déjà recadrée en 568x896 ; offset replace les boîtes dans l'image source."""
+        ox, oy, sx, sy = offset
         preds = []
         for m in self.models:
             r = m.predict(crop, verbose=False, conf=self.conf, device=self.device, half=self.half, imgsz=896)[0]
