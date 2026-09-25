@@ -21,7 +21,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from clashai.brain import Brain, Seen  # noqa: E402
+from clashai.brain import RIVER_Y, Brain, Seen  # noqa: E402
 from clashai.cards import DECK  # noqa: E402
 from clashai.opponent import UNIT2CARD  # noqa: E402
 from clashai.tiles import PHONE, ROWS  # noqa: E402
@@ -59,10 +59,15 @@ def main():
                 seen_enemy = bool(enemy) != flip
                 if name in UNIT2CARD:              # comme Brain.to_seen : unités seulement, pas les tours
                     board.append(Seen(name, seen_enemy, px, py))
+            # situation : l'ennemi le plus avancé sur notre moitié (défense), sinon attaque / temps calme
+            near = [b for b in board if b.enemy and b.y > RIVER_Y - 0.02]
+            threat = max(near, key=lambda b: b.y) if near else None
+            context = f"défense : {threat.name}" if threat else "attaque / calme"
             brain = Brain({"ignore_small": True})
             d = brain.decide(board, [e["card"], None, None, None], [True, False, False, False], 10.0, e["t"])
             pro = PHONE.cell(*to_phone(e["x"], e["y"], grid, flip))
             rec = {"video": vid, "t": e["t"], "card": e["card"], "winner": e.get("winner") == e["side"],
+                   "context": context, "threat_lane": (0 if threat.x < 0.5 else 1) if threat else None,
                    "pro": pro, "ai": d.tile if d else None, "reason": d.reason if d else "attendrait"}
             if d:
                 rec["dist"] = float(np.hypot(d.tile[0] - pro[0], d.tile[1] - pro[1]))

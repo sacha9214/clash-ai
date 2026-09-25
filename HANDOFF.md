@@ -29,6 +29,15 @@ Colle ce fichier à Claude Code pour reprendre.
   `scripts/extract_videos.py` localise l'arène (par les tours), analyse 5 images/s (x6 le temps réel) et écrit
   chaque carte jouée (camp, instant, case, plateau) dans `runs/videos/`. ~1 770 coups extraits.
 
+## Nuit du 25 au 26/09 (autonome, hors de Claude)
+- `scripts/night_detector.py` (PID 39148) : YOLO11s, 64 199 images (60 000 synthétiques + 4 199 réelles), 8 h max,
+  puis note sur le test (séquences jamais vues ; KataCR : F1 0.916), export TensorRT et rapport
+  `runs/detector/NIGHT_REPORT.md` (journal : `runs/detector/night.log`).
+- `scripts/night_videos.py` : 64 vidéos récentes et variées (30 h, 22 recherches : decks, bas niveau, top ladder)
+  -> `D:\clash-ai-videos80p` (+ `manifest.jsonl`), analysées APRÈS l'entraînement (GPU plein),
+  puis comparaison des placements -> `runs/videos/placement_report.txt` (journal : `runs/videos/night_videos.log`).
+- Rien n'est changé dans l'IA : le passage au nouveau détecteur attend le feu vert de Sacha.
+
 ## À faire
 1. Vidéos : découper les combats de façon fiable (chrono 3:00 plutôt que « tours visibles »), filtrer les cartes
    mal détectées par le deck vu, retrouver le vainqueur de chaque combat ; grille décalée d'~1 case sur les
