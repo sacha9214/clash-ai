@@ -53,13 +53,13 @@ def phone_ok() -> bool:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--games", type=int, default=30)
-    ap.add_argument("--wait-pid", type=int, default=None)
+    ap.add_argument("--wait-pid", type=int, nargs="*", default=[], help="attendre la fin de ces processus (GPU occupé)")
     a = ap.parse_args()
     if sys.platform == "win32":
         ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000001)
-    if a.wait_pid:
-        log(f"attente de la fin de l'entraînement (PID {a.wait_pid})…")
-        while pid_alive(a.wait_pid):
+    for pid in a.wait_pid:
+        log(f"attente de la fin du processus {pid} (GPU occupé)…")
+        while pid_alive(pid):
             time.sleep(60)
     start, fails = games_played(), 0
     log(f"=== matchs de nuit : objectif {a.games} combats ===")

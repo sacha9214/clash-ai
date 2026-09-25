@@ -36,8 +36,8 @@ Colle ce fichier à Claude Code pour reprendre.
 - `scripts/night_videos.py` : 64 vidéos récentes et variées (30 h, 22 recherches : decks, bas niveau, top ladder)
   -> `D:\clash-ai-videos80p` (+ `manifest.jsonl`), analysées APRÈS l'entraînement (GPU plein),
   puis comparaison des placements -> `runs/videos/placement_report.txt` (journal : `runs/videos/night_videos.log`).
-- `scripts/night_matches.py` : après l'entraînement, 30 combats automatiques (lots de 5, arrêt après 3 échecs
-  de suite ou `runs/games/STOP`) ; journal `runs/games/night_matches.log`. Les vidéos attendent la fin des matchs.
+- `scripts/night_matches.py` : après l'entraînement ET l'analyse des vidéos, 30 combats automatiques (lots de 5, arrêt après 3 échecs
+  de suite ou `runs/games/STOP`) ; journal `runs/games/night_matches.log`. (ordre : entraînement -> vidéos -> matchs).
 - Rien n'est changé dans l'IA : le passage au nouveau détecteur attend le feu vert de Sacha.
 
 ## À faire
