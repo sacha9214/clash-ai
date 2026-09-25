@@ -112,13 +112,18 @@ def pid_alive(pid: int) -> bool:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--hours", type=float, default=30.0)
-    ap.add_argument("--wait-pid", type=int, default=None, help="attendre la fin de ce processus (entraînement) avant le GPU")
+    ap.add_argument("--wait-pid", type=int, nargs="*", default=[],
+                    help="attendre la fin de ces processus (entraînement, matchs) avant d'utiliser le GPU")
     a = ap.parse_args()
     if sys.platform == "win32":
         ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000001)
     OUT.mkdir(parents=True, exist_ok=True)
     log(f"=== nuit des vidéos : objectif {a.hours} h ===")
-    chosen = pick(a.hours)
+    # reprise : ce qui est déjà téléchargé (manifeste) compte dans l'objectif
+    done_before = [json.loads(l) for l in open(MANIFEST, encoding="utf-8")] if MANIFEST.exists() else []
+    already = sum(v["duration"] for v in done_before) / 3600
+    log(f"déjà téléchargé : {len(done_before)} vidéos, {already:.1f} h")
+    chosen = pick(max(0.0, a.hours - already))
     log(f"{len(chosen)} vidéos retenues, {sum(v['duration'] for v in chosen) / 3600:.1f} h")
     new = []
     for i, v in enumerate(chosen, 1):
@@ -129,13 +134,17 @@ def main():
                 f.write(json.dumps(v, ensure_ascii=False) + "\n")
     log(f"téléchargées : {len(new)}")
 
-    if a.wait_pid:
-        log(f"attente de la fin de l'entraînement (PID {a.wait_pid}) pour utiliser le GPU…")
-        while pid_alive(a.wait_pid):
+    for pid in a.wait_pid:
+        log(f"attente de la fin du processus {pid} (GPU occupé)…")
+        while pid_alive(pid):
             time.sleep(60)
-    if new:
-        log("analyse des nouvelles vidéos (GPU)…")
-        files = [str(OUT / f"{vid}.mp4") for vid in new]
+    # toutes les vidéos du manifeste pas encore analysées (y compris celles d'un lancement précédent)
+    manifest = [json.loads(l)["id"] for l in open(MANIFEST, encoding="utf-8")] if MANIFEST.exists() else []
+    todo = [vid for vid in dict.fromkeys(manifest)
+            if (OUT / f"{vid}.mp4").exists() and not (ROOT / f"runs/videos/{vid}.raw.jsonl").exists()]
+    if todo:
+        log(f"analyse de {len(todo)} vidéos (GPU)…")
+        files = [str(OUT / f"{vid}.mp4") for vid in todo]
         subprocess.run([str(PY_KATACR), "scripts/extract_videos.py", *files], cwd=ROOT, env=env(),
                        stdout=open(LOG, "a", encoding="utf-8"), stderr=subprocess.STDOUT)
     log("comparaison de nos placements avec ceux des joueurs…")
