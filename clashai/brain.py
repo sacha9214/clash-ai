@@ -164,8 +164,12 @@ class Brain:
             order = ["valkyrie", "knight", "musketeer", "archers", "mini-pekka"]   # dégâts de zone
         else:
             order = ["knight", "valkyrie", "mini-pekka", "musketeer", "archers", "minions"]
+        # Canon : le bâtiment au centre attire les tanks (Géant, Hog…) entre les deux tours
+        if "cannon" in playable and not is_air and (is_tank or t.name in ("hog-rider", "hog", "battle-ram", "royal-hog")):
+            x = 0.5 + (-0.07 if lane_x < 0.5 else 0.07)
+            return Decision("cannon", playable["cannon"], x, 0.56, f"défense : {t.name} -> canon au centre")
         for card in order:
-            if card not in playable:
+            if card not in playable or card not in DECK:
                 continue
             c = DECK[card]
             if c.targets == "air+ground" and not c.flying:

@@ -118,6 +118,8 @@ class Agent:
             if d and now - last_play > 0.8:
                 h, w = img.shape[:2]
                 ok = play_card(dev, d.slot, (int(d.x * w), int(d.y * h)))
+                if ok and d.card in ("arrows", "fireball"):
+                    self.opp.note_our_spell(time.time(), d.x * w, d.y * h)
                 log.append({"t": round(now, 2), "card": d.card, "x": round(d.x, 3), "y": round(d.y, 3),
                             "reason": d.reason, "ok": ok, "elixir": el, "hand": hand,
                             "units": [(u.name, u.enemy, u.center) for u in units]})

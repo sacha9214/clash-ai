@@ -51,6 +51,9 @@ UNIT2CARD = {
 # unités qui naissent d'autres unités ou bâtiments : ce ne sont pas des cartes jouées
 SPELLS = {"arrows", "fireball", "zap", "poison", "the-log", "rocket", "lightning", "freeze", "earthquake",
           "tornado", "goblin-barrel", "barbarian-barrel", "giant-snowball", "graveyard", "rage"}
+# bâtiment -> unités qu'il produit tout seul (ce ne sont pas des cartes jouées)
+SPAWNER_OF = {"goblin-hut": {"spear-goblin"}, "tombstone": {"skeleton"}, "goblin-cage": {"goblin-brawler"},
+              "furnace": {"fire-spirit"}, "barbarian-hut": {"barbarian"}}
 SPAWNED = {"golemite", "lava-pup", "elixir-golem-mid", "elixir-golem-small", "phoenix-egg", "phoenix-small"}
 REGEN, MAX_ELIXIR, DOUBLE_AFTER = 1 / 2.8, 10.0, 120.0
 
@@ -65,6 +68,11 @@ class Opponent:
     recent: dict[str, tuple[float, int]] = field(default_factory=dict)   # carte -> (instant, unités vues)
     prev_counts: dict[str, int] = field(default_factory=dict)
     pending: dict[int, tuple[str, float]] = field(default_factory=dict)
+    spawner_seen: dict[str, float] = field(default_factory=dict)
+    our_spells: list[tuple[float, float, float]] = field(default_factory=list)   # (instant, x, y) de nos sorts
+
+    def note_our_spell(self, now: float, x: float, y: float) -> None:
+        self.our_spells = [s for s in self.our_spells if now - s[0] < 5] + [(now, x, y)]
 
     def update(self, units, now: float | None = None, frame_h: int = 1280) -> list[str]:
         """Met à jour avec les unités détectées. Renvoie les cartes que l'ennemi vient de poser.
@@ -75,7 +83,7 @@ class Opponent:
         sur l'analyse suivante (sinon c'est du bruit). Plusieurs unités du même type
         dans la même seconde et demie (3 gobelins) = une seule carte.
         Les sorts sont ignorés (effets trop brefs, confondus avec les nôtres)."""
-        now = now or time.time()
+        now = time.time() if now is None else now
         rate = REGEN * (2 if now - self.start > DOUBLE_AFTER else 1)
         self.elixir = min(MAX_ELIXIR, self.elixir + (now - self.last_t) * rate)
         self.last_t = now
@@ -99,13 +107,35 @@ class Opponent:
                 del self.pending[tid]
         # 2) nouveaux candidats : unités nées dans la moitié ennemie
         prev = getattr(self, "_prev_pos", [])
+        spawners = [(u.name, u.center) for u in units if u.name in SPAWNER_OF]
+        for u in units:
+            if u.name in SPAWNER_OF:
+                self.spawner_seen[u.name] = now
         for tid, u in alive.items():
             if tid in self.seen_ids:
                 continue
             self.seen_ids.add(tid)
-            if u.name in SPAWNED or u.name in SPELLS or u.name not in UNIT2CARD:
+            if u.name in SPELLS and u.name in UNIT2CARD:
+                mine = any(now - t < 3 and abs(x - u.center[0]) < 0.2 * frame_h / 2.2 and abs(y - u.center[1]) < 0.12 * frame_h
+                           for t, x, y in self.our_spells)
+                last = self.recent.get(u.name, (-1e9, 0))[0]
+                ours_half = u.center[1] > 0.45 * frame_h      # un sort ennemi vise nos unités/tours
+                if not mine and ours_half and u.conf >= 0.75 and now - last > 3:
+                    self.recent[u.name] = (now, 1)
+                    self.elixir = max(0.0, self.elixir - UNIT2CARD[u.name][1])
+                    self.played.append(u.name)
+                    new_cards.append(u.name)
+                continue
+            if u.name in SPAWNED or u.name not in UNIT2CARD:
                 continue
             card = UNIT2CARD[u.name][0]
+            # sortie d'un bâtiment (Cabane -> Gobelins à lance, Pierre tombale -> Squelettes…)
+            if any(u.name in SPAWNER_OF[b] and abs(bx - u.center[0]) < 0.2 * frame_h / 2.2
+                   and abs(by - u.center[1]) < 0.12 * frame_h for b, (bx, by) in spawners):
+                continue
+            if any(u.name in SPAWNER_OF[b] and now - t < 6 for b, t in self.spawner_seen.items()) \
+                    and self.played.count(card) >= 1 and now - self.recent.get(card, (-1e9, 0))[0] < 12:
+                continue
             # le suivi perd parfois une unité et lui redonne un nouveau numéro : si une unité
             # de la même carte était là, tout près, à l'analyse précédente, ce n'est pas une nouvelle carte
             if any(c == card and abs(x - u.center[0]) < 0.12 * frame_h / 2.2 and abs(y - u.center[1]) < 0.08 * frame_h
@@ -122,8 +152,9 @@ class Opponent:
         """Cartes connues de son deck, dans l'ordre de première apparition (8 max)."""
         out = []
         for c in self.played:
-            if c not in out:
-                out.append(c)
+            if c in out or (c in SPELLS and self.played.count(c) < 2):   # un sort vu une fois peut être du bruit
+                continue
+            out.append(c)
         return out[:8]
 
     @property
