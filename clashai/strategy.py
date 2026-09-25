@@ -35,6 +35,10 @@ def _key(p: dict) -> str:
 
 
 def load() -> dict:
+    seed = STATS.parents[1] / "learning/strategy_stats.json"   # état versionné sur GitHub
+    if not STATS.exists() and seed.exists():
+        STATS.parent.mkdir(parents=True, exist_ok=True)
+        STATS.write_text(seed.read_text())
     if STATS.exists():
         return json.loads(STATS.read_text())
     return {_key(DEFAULT): {"params": DEFAULT, "wins": 0, "losses": 0}}
