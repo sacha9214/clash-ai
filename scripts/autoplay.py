@@ -79,8 +79,9 @@ def result_of(img):
 ap = argparse.ArgumentParser()
 ap.add_argument("--games", type=int, default=5)
 ap.add_argument("--out", default="runs/games")
+ap.add_argument("--show", action="store_true", help="fenêtre en direct sur le Mac")
 a = ap.parse_args()
-agent = Agent(a.out)
+agent = Agent(a.out, show=a.show)
 journal = os.path.join(a.out, "journal.jsonl")
 
 with Device() as dev:

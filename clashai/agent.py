@@ -22,7 +22,8 @@ def _ascii(s: str) -> str:
 
 
 class Agent:
-    def __init__(self, out: str = "runs/games"):
+    def __init__(self, out: str = "runs/games", show: bool = False):
+        self.show = show
         self.det, self.brain, self.out = Detector(track=True), Brain(), out
         self.opp, self.opp_log = Opponent(), []
         os.makedirs(out, exist_ok=True)
@@ -107,6 +108,10 @@ class Agent:
             now = time.time()
             fps, t_prev = 1 / max(now - t_prev, 1e-3), now
             units, d, info, hand, el = self.think(img, now, fps)
+            if self.show:
+                view = self.annotate(img, units, d, info)
+                cv2.imshow("Clash AI", cv2.resize(view, (int(view.shape[1] * 1.25), int(view.shape[0] * 1.25))))
+                cv2.waitKey(1)
             if now - getattr(self, "_last_snap", 0) > 5:
                 self._last_snap = now
                 cv2.imwrite(os.path.join(folder, f"state{int(now) % 100000:05d}.jpg"), self.annotate(img, units, None, info))
