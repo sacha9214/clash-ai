@@ -28,8 +28,8 @@ SPACE = {
     "giant_when_counter_out": [False, True],  # Géant plus tôt quand ses contres connus ne sont plus dans sa main
     "fireball_patient": [False, True],      # Boule de feu sur cible seule : seulement si elle touche aussi une tour
 }
-DEFAULT = {"giant_elixir": 9, "giant_spot": "back", "support_min_elixir": 4, "arrows_min": 3,
-           "fireball_min": 2, "defend_line": 0.06, "counter_push": False, "cycle_at": 9.5,
+DEFAULT = {"giant_elixir": 9, "giant_spot": "mid", "support_min_elixir": 4, "arrows_min": 3,
+           "fireball_min": 2, "defend_line": 0.06, "counter_push": True, "cycle_at": 9.5,
            "punish_low_elixir": False, "fireball_spawners": False,
            "ignore_small": True, "punish_opposite": False, "giant_when_counter_out": False,
            "fireball_patient": False}
@@ -45,7 +45,15 @@ def load() -> dict:
         STATS.parent.mkdir(parents=True, exist_ok=True)
         STATS.write_text(seed.read_text())
     if STATS.exists():
-        return json.loads(STATS.read_text())
+        stats = json.loads(STATS.read_text())
+        # vidéos de pros (compare_placements.py) : Géant au milieu (rangées 20-24) et dans le couloir où ils
+        # viennent de jouer. On ajoute la meilleure variante actuelle dans ce style, sans victoire inventée :
+        # le bandit l'essaiera et la jugera sur de vrais matchs.
+        if stats:
+            best = max(stats.values(), key=lambda v: (v["wins"] + 1) / (v["wins"] + v["losses"] + 2))["params"]
+            pro = {**DEFAULT, **best, "giant_spot": "mid", "counter_push": True}
+            stats.setdefault(_key(pro), {"params": pro, "wins": 0, "losses": 0})
+        return stats
     return {_key(DEFAULT): {"params": DEFAULT, "wins": 0, "losses": 0}}
 
 

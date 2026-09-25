@@ -105,6 +105,10 @@ def crop_arena(img: np.ndarray, box) -> np.ndarray:
 
 
 TOWERS = ("king-tower", "queen-tower")
+# Une carte se pose dans sa moitié (rangées 0-14 pour l'adversaire, 17-31 pour le joueur) ; une unité qui
+# « apparaît » en 13-18 vient presque toujours d'un suivi perdu en marchant. Exceptions : se posent partout.
+RIVER_BAND = (13, 18)
+DEPLOY_ANYWHERE = {"miner", "goblin-barrel", "graveyard", "goblin-drill"}
 
 
 def detect_raw(path: str, det: D.Detector, loc: D.Detector) -> dict:
@@ -189,11 +193,16 @@ def process(vid: str) -> dict:
 
     # --- cartes posées : une unité qui APPARAÎT dans une moitié = une carte de ce camp ---
     events, seen_ids, pending, recent, prev, cur = [], set(), {}, {}, [], 0
+    memory: list[tuple[float, str, float, float]] = []   # unités vues ces 3 dernières secondes (instant, carte, x, y)
+
+    def tiles_apart(ax, ay, bx, by) -> float:
+        return float(np.hypot((ax - bx) / grid.tw, (ay - by) / grid.th))
+
     for f in F:
         if not f["b"]:
             continue
         if f["b"] != cur:
-            cur, seen_ids, pending, recent, prev = f["b"], set(), {}, {}, []
+            cur, seen_ids, pending, recent, prev, memory = f["b"], set(), {}, {}, [], []
         alive = {u[0]: u for u in f["u"] if u[0] >= 0}
         board = [[u[1], u[2], u[3], u[4]] for u in f["u"] if u[1] not in TOWERS]
         for tid, (card, side, x, y, tc) in list(pending.items()):
@@ -209,10 +218,16 @@ def process(vid: str) -> dict:
             if name in NOT_UNITS or name not in UNIT2CARD:
                 continue
             card = UNIT2CARD[name][0]
-            if any(c == card and abs(qx - x) < 0.08 and abs(qy - y) < 0.06 for c, qx, qy in prev):
-                continue                    # le suivi redonne parfois un numéro neuf à une unité déjà là
-            pending[tid] = (card, "opponent" if y < 0.5 else "player", x, y, f["t"])
-        prev = [(UNIT2CARD[u[1]][0], u[3], u[4]) for u in f["u"] if u[1] in UNIT2CARD]
+            # le suivi perd parfois une unité et lui redonne un numéro neuf plus loin : même carte vue
+            # à moins de 3,5 cases dans les 3 dernières secondes -> c'est la même unité, pas une carte posée
+            if any(c == card and tiles_apart(qx, qy, x, y) < 3.5 for _, c, qx, qy in memory):
+                continue
+            row = grid.cell(x, y)[1]
+            if card not in DEPLOY_ANYWHERE and RIVER_BAND[0] <= row <= RIVER_BAND[1]:
+                continue                    # née près de la rivière : impossible de dire qui l'a posée
+            pending[tid] = (card, "opponent" if row < 16 else "player", x, y, f["t"])
+        memory = [m for m in memory if f["t"] - m[0] <= 3.0] + \
+            [(f["t"], UNIT2CARD[u[1]][0], u[3], u[4]) for u in f["u"] if u[1] in UNIT2CARD]
 
     # --- par combat : deck (8 cartes les plus vues, au moins 2 fois), vainqueur (tours restantes à la fin) ---
     battles = []

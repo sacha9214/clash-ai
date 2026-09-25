@@ -142,6 +142,7 @@ class Brain:
         self.opp_heavy_t = -1e9                  # instant de sa dernière carte à 6+ élixir
         self._ours: list[Seen] = []
         self.match = None                        # towers.MatchState : PV de nos tours, tours ennemies, phase
+        self.last_own_play: tuple[int, float] | None = None   # (couloir, instant) de notre dernière troupe
         self.own_recent: list[tuple[tuple[str, ...], float, float, float]] = []   # (unités, x, y, instant) posées par nous
 
     # ---- perception -> monde simplifié ----
@@ -182,6 +183,8 @@ class Brain:
             # le jeu pose au centre d'une case : on vise ce centre (et on reste hors des tours)
             d.x, d.y = PHONE.snap(*_clamp_own(*PHONE.snap(d.x, d.y)))
             self.own_recent.append((DECK[d.card].units, d.x, d.y, now))
+            if abs(d.x - 0.5) > 0.06:                                  # pas une carte posée au centre
+                self.last_own_play = (_lane(d.x), now)
         d.tile = PHONE.cell(d.x, d.y)
         return d
 
@@ -382,8 +385,10 @@ class Brain:
         if "giant" in playable and (elixir >= giant_at or punish):
             lane = self._attack_lane(seen)
             tower_down = self.match is not None and not all(self.match.enemy_alive.values())
-            if self.p["counter_push"] and self.last_defense_lane is not None and not tower_down:
-                lane = self.last_defense_lane      # contre-attaque avec les survivants de la défense
+            if self.p["counter_push"] and not tower_down and self.last_own_play and now - self.last_own_play[1] < 15:
+                # les pros empilent le Géant dans le couloir où ils viennent de jouer (5/5 dans les vidéos) :
+                # il avance avec nos troupes déjà sur place (contre-attaque ou poussée)
+                lane = self.last_own_play[0]
             self.giant_lane, self.giant_time = lane, now
             spot = self.p["giant_spot"]
             if spot == "back" and set(self.opp_deck) & PULL_BUILDINGS:
@@ -420,6 +425,12 @@ class Brain:
                 # une seule Flèche ne peut plus les prendre ensemble
                 x, y = _clamp_own(0.5, OWN_TOWER_Y + 0.0)
                 return Decision(card, playable[card], x, y, "rien à faire : archères séparées au centre")
+            if card in ("mini-pekka", "knight"):
+                # les pros les jouent dans un couloir, rangées 20-25 (vidéos), jamais derrière le Roi
+                lane = self.last_own_play[0] if self.last_own_play and now - self.last_own_play[1] < 15 \
+                    else self._attack_lane(seen)
+                x, y = PHONE.center(3 if lane == 0 else 14, OWN_FIRST_ROW + 5)
+                return Decision(card, playable[card], x, y, f"élixir plein : {card} dans le couloir, prêt à contre-attaquer")
             if card:
                 x, y = _clamp_own(0.5 + (0.1 if self._weak_lane(seen) else -0.1), 0.69)
                 return Decision(card, playable[card], x, y, f"élixir plein : {card} derrière le Roi")
