@@ -24,29 +24,36 @@ import yaml  # noqa: E402
 from ultralytics.cfg import get_cfg  # noqa: E402
 from katacr.yolov8.train import YOLO_CR  # noqa: E402
 
-ap = argparse.ArgumentParser()
-ap.add_argument("--model", default="yolov8s")
-ap.add_argument("--epochs", type=int, default=40)
-ap.add_argument("--batch", type=int, default=16)
-ap.add_argument("--workers", type=int, default=6)
-ap.add_argument("--name", default=None)
-ap.add_argument("--hours", type=float, default=None, help="durée max d'entraînement")
-ap.add_argument("--fraction", type=float, default=1.0, help="part des images de validation (tests rapides)")
-a = ap.parse_args()
 
-device = 0 if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
-# data.yaml de KataCR avec un chemin absolu : on en écrit une copie qui pointe vers le dataset local
-data = yaml.safe_load(open(KATACR / "katacr/yolov8/detector1/data.yaml", encoding="utf-8"))
-data["path"] = str(ROOT / "data/Clash-Royale-Dataset/images/part2")
-data_yaml = ROOT / "runs/detector/data.yaml"
-data_yaml.parent.mkdir(parents=True, exist_ok=True)
-yaml.safe_dump(data, open(data_yaml, "w", encoding="utf-8"), allow_unicode=True, sort_keys=False)
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--model", default="yolov8s")
+    ap.add_argument("--epochs", type=int, default=40)
+    ap.add_argument("--batch", type=int, default=16)
+    ap.add_argument("--workers", type=int, default=6)
+    ap.add_argument("--name", default=None)
+    ap.add_argument("--hours", type=float, default=None, help="durée max d'entraînement")
+    ap.add_argument("--fraction", type=float, default=1.0, help="part des images de validation (tests rapides)")
+    a = ap.parse_args()
 
-cfg = dict(get_cfg("./katacr/yolov8/ClashRoyale.yaml"))
-cfg.update(
-    model=f"{a.model}.yaml", data=str(data_yaml),
-    epochs=a.epochs, batch=a.batch, workers=a.workers, device=device, deterministic=False,
-    project=str(ROOT / "runs/detector"), name=a.name or f"{a.model}_single", exist_ok=True,
-    fraction=a.fraction, patience=8, time=a.hours,
-)
-YOLO_CR(f"{a.model}.yaml", task="detect").train(**cfg)
+    device = 0 if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+    # data.yaml de KataCR avec un chemin absolu : on en écrit une copie qui pointe vers le dataset local
+    data = yaml.safe_load(open(KATACR / "katacr/yolov8/detector1/data.yaml", encoding="utf-8"))
+    data["path"] = str(ROOT / "data/Clash-Royale-Dataset/images/part2")
+    data_yaml = ROOT / "runs/detector/data.yaml"
+    data_yaml.parent.mkdir(parents=True, exist_ok=True)
+    yaml.safe_dump(data, open(data_yaml, "w", encoding="utf-8"), allow_unicode=True, sort_keys=False)
+
+    cfg = dict(get_cfg("./katacr/yolov8/ClashRoyale.yaml"))
+    cfg.update(
+        model=f"{a.model}.yaml", data=str(data_yaml),
+        epochs=a.epochs, batch=a.batch, workers=a.workers, device=device, deterministic=False,
+        project=str(ROOT / "runs/detector"), name=a.name or f"{a.model}_single", exist_ok=True,
+        fraction=a.fraction, patience=8, time=a.hours,
+    )
+    YOLO_CR(f"{a.model}.yaml", task="detect").train(**cfg)
+
+
+# Windows : les processus de chargement des données réimportent ce script -> tout doit être sous ce garde
+if __name__ == "__main__":
+    main()

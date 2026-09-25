@@ -58,10 +58,11 @@ class Unit:
 
 
 class Detector:
-    def __init__(self, device: str | None = None, track: bool = True, conf: float = 0.5, iou: float = 0.6):
+    def __init__(self, device: str | None = None, track: bool = True, conf: float = 0.5, iou: float = 0.6,
+                 weights: list | None = None):
         self.device = device or ("cuda:0" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
         self.half = self.device != "cpu"
-        self.models = [YOLO_CR(str(p)) for p in DETECTORS]
+        self.models = [YOLO_CR(str(p)) for p in (weights or DETECTORS)]   # weights : nos propres modèles
         self.iou = iou
         self.tracker = None
         self.conf = conf

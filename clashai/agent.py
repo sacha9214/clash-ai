@@ -16,6 +16,7 @@ from clashai.actions import play_card
 from clashai.brain import Brain
 from clashai.detect import Detector, draw
 from clashai.opponent import UNIT2CARD, Opponent
+from clashai.towers import MatchState
 import numpy as np
 
 
@@ -47,11 +48,17 @@ class Agent:
         self.det, self.brain, self.out = Detector(track=True), Brain(), out
         self.opp, self.opp_log = Opponent(), []
         self.spells_pending, self.spells_log = [], []
+        self.perf, self.perf_log = {"det_ms": 0.0}, []
+        self.match = MatchState()
         os.makedirs(out, exist_ok=True)
 
     def think(self, img, now, fps):
+        t0 = time.perf_counter()
         units = self.det(img)
+        self.perf["det_ms"] = (time.perf_counter() - t0) * 1000
         self._watch_spells(units, img, now)
+        self.match.update(img, units, now)
+        self.brain.match = self.match
         h, w = img.shape[:2]
         seen = Brain.to_seen(units, w, h, self.det.trails, fps)
         hand = H.read_hand(img, min_score=0.45)
@@ -68,7 +75,7 @@ class Agent:
         if any(costs.get(c, 0) >= 6 for c in new):
             self.brain.opp_heavy_t = now
         d = self.brain.decide(seen, hand, ready, el, now)
-        info = [f"elixir {el:.1f}  main : " + ", ".join(c or "?" for c in hand)]
+        info = [f"elixir {el:.1f}  main : " + ", ".join(c or "?" for c in hand), self.match.summary()]
         return units, d, info, hand, el
 
     def _show(self, img, units, d, info):
@@ -150,12 +157,15 @@ class Agent:
         self.brain = Brain(params)
         self.opp, self.opp_log = Opponent(), []
         self.spells_pending, self.spells_log = [], []
+        self.perf, self.perf_log = {"det_ms": 0.0}, []
+        self.match = MatchState()
         folder = os.path.join(self.out, game_id)
         os.makedirs(folder, exist_ok=True)
         self.det.tracker.reset() if self.det.tracker is not None else None
         log, last_play, gone, t_prev, n, refused = [], 0.0, None, time.time(), 0, 0
         while True:
-            img, _, _ = dev.frame()
+            img, t_recv, _ = dev.frame()
+            t_loop = time.perf_counter()
             if not B.in_battle(img):
                 gone = gone or time.time()
                 if time.time() - gone > 5:
@@ -166,7 +176,19 @@ class Agent:
             now = time.time()
             fps, t_prev = 1 / max(now - t_prev, 1e-3), now
             units, d, info, hand, el = self.think(img, now, fps)
+            t_show = time.perf_counter()
             self._show(img, units, d, info)
+            # latence de chaque tour de boucle : âge de l'image, détection, reste de la réflexion, affichage
+            end = time.perf_counter()
+            self.perf_log.append({"age_ms": round((t_loop - t_recv) * 1000), "det_ms": round(self.perf["det_ms"]),
+                                  "think_ms": round((t_show - t_loop) * 1000 - self.perf["det_ms"]),
+                                  "show_ms": round((end - t_show) * 1000), "loop_ms": round((end - t_loop) * 1000)})
+            if now - getattr(self, "_last_raw", 0) > 1.5:
+                # image brute (sans dessins) : matière pour étiqueter nos propres images (phase C du détecteur)
+                self._last_raw = now
+                raw_dir = os.path.join(self.out, "..", "capture", game_id)
+                os.makedirs(raw_dir, exist_ok=True)
+                _save(os.path.join(raw_dir, f"{int(now * 10) % 10**7:07d}.jpg"), img.copy())
             if now - getattr(self, "_last_snap", 0) > 5:
                 self._last_snap = now
                 _save(os.path.join(folder, f"state{int(now) % 100000:05d}.jpg"), self.annotate(img, units, None, info))
@@ -190,6 +212,9 @@ class Agent:
                     refused += 1
                     last_play = time.time() - 0.4
         _jobs.join()   # captures en attente écrites avant le résumé
+        with open(os.path.join(folder, "perf.jsonl"), "w") as f:
+            for row in self.perf_log:
+                f.write(json.dumps(row) + chr(10))
         with open(os.path.join(folder, "spells.jsonl"), "w") as f:   # temps de vol mesurés de nos sorts
             for row in self.spells_log:
                 f.write(json.dumps(row) + "\n")

@@ -141,6 +141,7 @@ class Brain:
         self.opp_deck: list[str] = []
         self.opp_heavy_t = -1e9                  # instant de sa dernière carte à 6+ élixir
         self._ours: list[Seen] = []
+        self.match = None                        # towers.MatchState : PV de nos tours, tours ennemies, phase
         self.own_recent: list[tuple[tuple[str, ...], float, float, float]] = []   # (unités, x, y, instant) posées par nous
 
     # ---- perception -> monde simplifié ----
@@ -211,8 +212,9 @@ class Brain:
         threats = [t for t in threats if t.name in TANK_UNITS or
                    sum(math.hypot(o.x - t.x, o.y - t.y) < 0.15 for o in ours) <
                    sum(math.hypot(e.x - t.x, e.y - t.y) < 0.15 for e in threats)]
-        if self.p.get("ignore_small"):
+        if self.p.get("ignore_small") and not any(self._tower_low(_lane(t.x)) for t in threats):
             # 1-2 petites unités (gobelin, squelette…) : les tours s'en chargent, on garde l'élixir
+            # (sauf si la tour de ce couloir est basse : là, chaque point de vie compte)
             small = [t for t in threats if t.name in SWARM_UNITS]
             if len(small) == len(threats) and len(small) <= 2:
                 threats = []
@@ -349,7 +351,19 @@ class Brain:
             return Decision(card, playable[card], x, y, f"défense : {t.name} ({kind}) -> {card}")
         return None
 
+    def _tower_low(self, lane: int) -> bool:
+        return self.match is not None and self.match.our_hp[lane] < 0.35
+
+    def _attack_lane(self, seen: list[Seen]) -> int:
+        """Une tour princesse ennemie tombée : on attaque ce couloir (leur Roi y est à découvert)."""
+        if self.match is not None:
+            dead = [l for l in (0, 1) if not self.match.enemy_alive[l]]
+            if len(dead) == 1:
+                return dead[0]
+        return self._weak_lane(seen)
+
     def _attack(self, seen: list[Seen], playable: dict, elixir: float, now: float) -> Decision | None:
+        fast = self.match is not None and self.match.phase(now) != "normal"   # l'élixir revient 2x plus vite
         # punir : l'adversaire vient de dépenser, il ne peut pas bien défendre tout de suite
         punish = self.p.get("punish_low_elixir") and self.opp_elixir < 3 and elixir >= 5
         # il vient de poser une carte lourde : il est à sec, on frappe tout de suite dans l'AUTRE couloir
@@ -360,14 +374,15 @@ class Brain:
                     x, y = _clamp_own(LANES_X[lane], 0.47)
                     self.opp_heavy_t = -1e9
                     return Decision(card, playable[card], x, y, f"punition : carte lourde en face -> {card} au pont opposé")
-        giant_at = self.p["giant_elixir"]
+        giant_at = self.p["giant_elixir"] - (1 if fast else 0)
         # ses contres au Géant connus et tous hors de sa main (joués récemment) : fenêtre pour lancer plus tôt
         known = set(self.opp_deck) & GIANT_COUNTERS
         if self.p.get("giant_when_counter_out") and known and not known & set(self.opp_hand):
             giant_at -= 2
         if "giant" in playable and (elixir >= giant_at or punish):
-            lane = self._weak_lane(seen)
-            if self.p["counter_push"] and self.last_defense_lane is not None:
+            lane = self._attack_lane(seen)
+            tower_down = self.match is not None and not all(self.match.enemy_alive.values())
+            if self.p["counter_push"] and self.last_defense_lane is not None and not tower_down:
                 lane = self.last_defense_lane      # contre-attaque avec les survivants de la défense
             self.giant_lane, self.giant_time = lane, now
             spot = self.p["giant_spot"]
@@ -375,8 +390,11 @@ class Brain:
                 spot = "corner"     # son bâtiment ne pourra pas tirer le Géant vers le centre depuis le coin
             lx = LANES_X[lane] + ((-0.12 if lane == 0 else 0.12) if spot == "corner" else 0)
             x, y = _clamp_own(lx, {"back": 0.69, "corner": 0.69, "mid": 0.55, "bridge": 0.47}.get(spot, 0.69))
+            countered_out = self.p.get("giant_when_counter_out") and known and not known & set(self.opp_hand)
             why = "l'ennemi est à sec" if punish and elixir < giant_at else \
-                "ses contres sont joués" if giant_at < self.p["giant_elixir"] and elixir < self.p["giant_elixir"] else \
+                "ses contres sont joués" if countered_out and elixir < self.p["giant_elixir"] else \
+                "double élixir" if fast and elixir < self.p["giant_elixir"] else \
+                "sa tour de ce côté est tombée" if tower_down and lane == self._attack_lane(seen) else \
                 {"back": "au fond", "corner": "dans le coin" + (" (il a un bâtiment)" if set(self.opp_deck) & PULL_BUILDINGS else ""),
                  "mid": "au milieu", "bridge": "au pont"}.get(spot, spot)
             if punish and elixir < giant_at:
@@ -394,7 +412,7 @@ class Brain:
                 if card in playable:
                     x, y = _clamp_own(g.x, g.y + 0.07)       # ~4 cases derrière : hors d'une Boule de feu sur le Géant
                     return Decision(card, playable[card], x, y, f"soutien : {card} derrière le Géant")
-        if elixir >= self.p["cycle_at"] and playable:
+        if elixir >= self.p["cycle_at"] - (1.5 if fast else 0) and playable:
             # élixir plein et rien à faire : on fait tourner la carte la moins chère, sans risque
             card = min((c for c in playable if DECK[c].kind == "troop"), key=lambda c: DECK[c].cost, default=None)
             if card == "archers":
