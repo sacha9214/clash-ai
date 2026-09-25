@@ -46,10 +46,12 @@ class Agent:
         self.show = show
         self.det, self.brain, self.out = Detector(track=True), Brain(), out
         self.opp, self.opp_log = Opponent(), []
+        self.spells_pending, self.spells_log = [], []
         os.makedirs(out, exist_ok=True)
 
     def think(self, img, now, fps):
         units = self.det(img)
+        self._watch_spells(units, img, now)
         h, w = img.shape[:2]
         seen = Brain.to_seen(units, w, h, self.det.trails, fps)
         hand = H.read_hand(img, min_score=0.45)
@@ -75,10 +77,27 @@ class Agent:
             cv2.imshow("Clash AI", cv2.resize(view, (int(view.shape[1] * 1.25), int(view.shape[0] * 1.25))))
             cv2.waitKey(1)
 
+    def _watch_spells(self, units, img, now):
+        """Mesure le temps de vol de nos sorts : du tap jusqu'à ce que le détecteur voie l'effet près de la cible.
+        Sert à caler SPELL_IMPACT_S (brain.py) sur de vrais matchs."""
+        from clashai.brain import KING_Y, _tile_dist
+        h, w = img.shape[:2]
+        for sp in list(self.spells_pending):
+            if now - sp["t_tap"] > 4:
+                self.spells_pending.remove(sp)            # jamais vu : on abandonne
+                continue
+            for u in units:
+                if u.name == sp["card"] and _tile_dist(u.center[0] / w, u.center[1] / h, sp["x"], sp["y"]) < 4:
+                    self.spells_log.append({"card": sp["card"], "flight_s": round(now - sp["t_tap"], 2),
+                                            "dist_tiles": round(_tile_dist(sp["x"], sp["y"], 0.5, KING_Y), 1)})
+                    self.spells_pending.remove(sp)
+                    break
+
     def _observe(self, img, info):
         """Pendant qu'une carte se pose : on continue de suivre les unités et d'afficher (pas de décision)."""
         now = time.time()
         units = self.det(img)
+        self._watch_spells(units, img, now)
         for c in self.opp.update(units, now, img.shape[0]):
             self.opp_log.append({"t": round(now, 2), "card": c, "elixir_after": round(self.opp.elixir, 1)})
         self._show(img, units, None, info)
@@ -130,6 +149,7 @@ class Agent:
         """Joue un combat jusqu'au bout avec la variante de stratégie `params`."""
         self.brain = Brain(params)
         self.opp, self.opp_log = Opponent(), []
+        self.spells_pending, self.spells_log = [], []
         folder = os.path.join(self.out, game_id)
         os.makedirs(folder, exist_ok=True)
         self.det.tracker.reset() if self.det.tracker is not None else None
@@ -158,6 +178,7 @@ class Agent:
                 play_ms = round((time.perf_counter() - t_play) * 1000)
                 if ok and d.card in ("arrows", "fireball"):
                     self.opp.note_our_spell(time.time(), d.x * w, d.y * h)
+                    self.spells_pending.append({"card": d.card, "x": d.x, "y": d.y, "t_tap": time.time()})
                 log.append({"t": round(now, 2), "card": d.card, "x": round(d.x, 3), "y": round(d.y, 3), "tile": d.tile,
                             "reason": d.reason, "ok": ok, "play_ms": play_ms, "elixir": el, "hand": hand,
                             "units": [(u.name, u.enemy, u.center) for u in units]})
@@ -169,6 +190,9 @@ class Agent:
                     refused += 1
                     last_play = time.time() - 0.4
         _jobs.join()   # captures en attente écrites avant le résumé
+        with open(os.path.join(folder, "spells.jsonl"), "w") as f:   # temps de vol mesurés de nos sorts
+            for row in self.spells_log:
+                f.write(json.dumps(row) + "\n")
         with open(os.path.join(folder, "decisions.jsonl"), "w") as f:
             for row in log:
                 f.write(json.dumps(row, default=str) + "\n")

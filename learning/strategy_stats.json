@@ -202,7 +202,7 @@
    "ignore_small": true
   },
   "wins": 1,
-  "losses": 0
+  "losses": 1
  },
  "{\"arrows_min\": 3, \"counter_push\": false, \"cycle_at\": 9.5, \"defend_line\": 0.06, \"fireball_min\": 3, \"fireball_spawners\": true, \"giant_elixir\": 9, \"giant_spot\": \"back\", \"ignore_small\": true, \"punish_low_elixir\": false, \"support_min_elixir\": 4}": {
   "params": {
@@ -277,5 +277,65 @@
   },
   "wins": 0,
   "losses": 1
+ },
+ "{\"arrows_min\": 4, \"counter_push\": false, \"cycle_at\": 9.5, \"defend_line\": 0.05, \"fireball_min\": 1, \"fireball_patient\": false, \"fireball_spawners\": true, \"giant_elixir\": 8, \"giant_spot\": \"back\", \"giant_when_counter_out\": false, \"ignore_small\": true, \"punish_low_elixir\": false, \"punish_opposite\": false, \"support_min_elixir\": 4}": {
+  "params": {
+   "giant_elixir": 8,
+   "giant_spot": "back",
+   "support_min_elixir": 4,
+   "arrows_min": 4,
+   "fireball_min": 1,
+   "defend_line": 0.05,
+   "counter_push": false,
+   "cycle_at": 9.5,
+   "punish_low_elixir": false,
+   "fireball_spawners": true,
+   "ignore_small": true,
+   "punish_opposite": false,
+   "giant_when_counter_out": false,
+   "fireball_patient": false
+  },
+  "wins": 0,
+  "losses": 1
+ },
+ "{\"arrows_min\": 3, \"counter_push\": false, \"cycle_at\": 9.5, \"defend_line\": 0.05, \"fireball_min\": 1, \"fireball_patient\": false, \"fireball_spawners\": false, \"giant_elixir\": 8, \"giant_spot\": \"back\", \"giant_when_counter_out\": false, \"ignore_small\": true, \"punish_low_elixir\": true, \"punish_opposite\": true, \"support_min_elixir\": 4}": {
+  "params": {
+   "giant_elixir": 8,
+   "giant_spot": "back",
+   "support_min_elixir": 4,
+   "arrows_min": 3,
+   "fireball_min": 1,
+   "defend_line": 0.05,
+   "counter_push": false,
+   "cycle_at": 9.5,
+   "punish_low_elixir": true,
+   "fireball_spawners": false,
+   "ignore_small": true,
+   "punish_opposite": true,
+   "giant_when_counter_out": false,
+   "fireball_patient": false
+  },
+  "wins": 0,
+  "losses": 1
+ },
+ "{\"arrows_min\": 3, \"counter_push\": true, \"cycle_at\": 9.5, \"defend_line\": 0.0, \"fireball_min\": 2, \"fireball_patient\": false, \"fireball_spawners\": false, \"giant_elixir\": 8, \"giant_spot\": \"bridge\", \"giant_when_counter_out\": false, \"ignore_small\": true, \"punish_low_elixir\": false, \"punish_opposite\": false, \"support_min_elixir\": 4}": {
+  "params": {
+   "giant_elixir": 8,
+   "giant_spot": "bridge",
+   "support_min_elixir": 4,
+   "arrows_min": 3,
+   "fireball_min": 2,
+   "defend_line": 0.0,
+   "counter_push": true,
+   "cycle_at": 9.5,
+   "punish_low_elixir": false,
+   "fireball_spawners": false,
+   "ignore_small": true,
+   "punish_opposite": false,
+   "giant_when_counter_out": false,
+   "fireball_patient": false
+  },
+  "wins": 1,
+  "losses": 0
  }
 }

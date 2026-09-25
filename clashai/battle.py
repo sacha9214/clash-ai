@@ -64,4 +64,6 @@ def card_ready(img: np.ndarray, slot: int) -> bool:
     x0, y0, x1, y1 = card_box(img, slot)
     patch = img[y0:y1, x0:x1].astype(int)
     sat = patch.max(axis=2) - patch.min(axis=2)
-    return sat.mean() > 45 and patch.std() > 35
+    # grisée : saturation ~0-3 ; prête : 36+ (le Canon, carte grise/métal, est à 36-37 — l'ancien seuil 45
+    # le croyait toujours grisé, il n'était jamais joué). Mesuré sur assets/card_templates.npz.
+    return sat.mean() > 18 and patch.std() > 35
