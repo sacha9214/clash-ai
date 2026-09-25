@@ -69,6 +69,7 @@ class Opponent:
     prev_counts: dict[str, int] = field(default_factory=dict)
     pending: dict[int, tuple[str, float]] = field(default_factory=dict)
     spawner_seen: dict[str, float] = field(default_factory=dict)
+    gained: float = 0.0
     our_spells: list[tuple[float, float, float]] = field(default_factory=list)   # (instant, x, y) de nos sorts
 
     def note_our_spell(self, now: float, x: float, y: float) -> None:
@@ -85,7 +86,9 @@ class Opponent:
         Les sorts sont ignorés (effets trop brefs, confondus avec les nôtres)."""
         now = time.time() if now is None else now
         rate = REGEN * (2 if now - self.start > DOUBLE_AFTER else 1)
-        self.elixir = min(MAX_ELIXIR, self.elixir + (now - self.last_t) * rate)
+        gain = (now - self.last_t) * rate
+        self.gained += gain
+        self.elixir = min(MAX_ELIXIR, self.elixir + gain)
         self.last_t = now
         alive = {u.track_id: u for u in units if u.track_id >= 0}
         new_cards = []
@@ -175,7 +178,9 @@ class Opponent:
     def banner(self) -> list[str]:
         """Trois lignes courtes pour le bandeau du haut."""
         known = len(self.deck)
-        l1 = f"ADVERSAIRE : elixir ~{self.elixir:.0f}/10   cartes vues {known}/8"
+        spent = sum(next(v[1] for v in UNIT2CARD.values() if v[0] == c) for c in self.played)
+        l1 = (f"ADVERSAIRE elixir {self.elixir:.1f}/10 = 5 + {self.gained:.0f} gagnes - {spent} joues"
+              f"   ({known}/8 cartes)")
         l2 = "deck : " + (", ".join(self.deck) or "?")
         l3 = ("main probable : " + (", ".join(self.hand) or "?")) if known >= 5 else "main : attendre 5 cartes vues"
         if self.next_in:
