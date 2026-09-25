@@ -394,14 +394,16 @@ class Brain:
             if spot == "back" and set(self.opp_deck) & PULL_BUILDINGS:
                 spot = "corner"     # son bâtiment ne pourra pas tirer le Géant vers le centre depuis le coin
             lx = LANES_X[lane] + ((-0.12 if lane == 0 else 0.12) if spot == "corner" else 0)
-            x, y = _clamp_own(lx, {"back": 0.69, "corner": 0.69, "mid": 0.55, "bridge": 0.47}.get(spot, 0.69))
+            if spot == "king":
+                lx = 0.5 + (-0.12 if lane == 0 else 0.12)   # juste derrière le Roi, du côté du couloir visé
+            x, y = _clamp_own(lx, {"king": 0.69, "back": 0.69, "corner": 0.69, "mid": 0.55, "bridge": 0.47}.get(spot, 0.69))
             countered_out = self.p.get("giant_when_counter_out") and known and not known & set(self.opp_hand)
             why = "l'ennemi est à sec" if punish and elixir < giant_at else \
                 "ses contres sont joués" if countered_out and elixir < self.p["giant_elixir"] else \
                 "double élixir" if fast and elixir < self.p["giant_elixir"] else \
                 "sa tour de ce côté est tombée" if tower_down and lane == self._attack_lane(seen) else \
                 {"back": "au fond", "corner": "dans le coin" + (" (il a un bâtiment)" if set(self.opp_deck) & PULL_BUILDINGS else ""),
-                 "mid": "au milieu", "bridge": "au pont"}.get(spot, spot)
+                 "mid": "au milieu", "bridge": "au pont", "king": "derrière le Roi"}.get(spot, spot)
             if punish and elixir < giant_at:
                 x, y = _clamp_own(LANES_X[lane], 0.47)   # pression immédiate au pont
             return Decision("giant", playable["giant"], x, y, f"attaque : Géant ({why})")

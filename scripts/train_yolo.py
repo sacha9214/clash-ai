@@ -6,6 +6,7 @@ Tourne dans .venv-yolo (ultralytics 8.4 + torch cu128) :
   .venv-yolo\\Scripts\\python scripts/train_yolo.py --model yolo11s.pt --hours 8
 """
 import argparse
+import sys
 from pathlib import Path
 
 from ultralytics import YOLO
@@ -24,6 +25,12 @@ def main():
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--name", default=None)
     a = ap.parse_args()
+    if sys.platform == "win32":
+        # empêche la mise en veille pendant l'entraînement (comme un lecteur vidéo) ; relâché à la fin du programme,
+        # aucun réglage Windows n'est modifié
+        import ctypes
+        ES_CONTINUOUS, ES_SYSTEM_REQUIRED = 0x80000000, 0x00000001
+        ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED)
     YOLO(a.model).train(
         data=a.data, epochs=a.epochs, time=a.hours, batch=a.batch, imgsz=a.imgsz, workers=a.workers,
         device=0, project=str(ROOT / "runs/detector"), name=a.name or Path(a.model).stem + "_cr", exist_ok=True,

@@ -25,7 +25,7 @@ from clashai import detect as D  # noqa: E402
 from katacr.constants.label_list import idx2unit  # noqa: E402
 
 VAL = ROOT / "data/Clash-Royale-Dataset/images/part2"
-N_IMAGES = 600          # sous-ensemble fixe, réparti sur toutes les séquences
+TEST_LIST = Path("D:/clash-ai-dataset/test_real.txt")          # sous-ensemble fixe, réparti sur toutes les séquences
 
 
 def iou(a, b) -> float:
@@ -50,8 +50,9 @@ def truth(img_path: Path, w: int, h: int) -> list[tuple[str, int, tuple]]:
 def main():
     weights = [a for a in sys.argv[1:] if a.endswith(".pt")] or None
     det = D.Detector(track=False, weights=weights)
-    files = [VAL / l.strip() for l in open(VAL / "yolo_annotation.txt") if l.strip()]
-    files = files[:: max(1, len(files) // N_IMAGES)][:N_IMAGES]
+    # test : séquences vidéo ENTIÈRES jamais vues à l'entraînement (D:/clash-ai-dataset/test_real.txt),
+    # pour que des images voisines presque identiques ne faussent pas la note
+    files = [VAL / l.strip() for l in open(TEST_LIST) if l.strip()]
     tp = fp = fn = side_ok = 0
     missed, confused = collections.Counter(), collections.Counter()
     times = []

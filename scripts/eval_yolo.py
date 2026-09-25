@@ -22,7 +22,7 @@ sys.path.insert(0, str(ROOT / "third_party/KataCR"))
 from katacr.constants.label_list import idx2unit  # noqa: E402
 
 VAL = ROOT / "data/Clash-Royale-Dataset/images/part2"
-N_IMAGES = 600
+TEST_LIST = Path("D:/clash-ai-dataset/test_real.txt")
 ARENA_SIZE = (568, 896)
 SKIP = {"bar", "bar-level", "tower-bar", "king-tower-bar", "dagger-duchess-tower-bar", "elixir", "clock", "emote",
         "evolution-symbol", "ice-spirit-evolution-symbol", "text", "selected"}
@@ -42,8 +42,9 @@ def skip(name: str) -> bool:
 def main():
     weights = sys.argv[1]
     model = YOLO(weights)
-    files = [VAL / l.strip() for l in open(VAL / "yolo_annotation.txt") if l.strip()]
-    files = files[:: max(1, len(files) // N_IMAGES)][:N_IMAGES]
+    # test : séquences vidéo ENTIÈRES jamais vues à l'entraînement (D:/clash-ai-dataset/test_real.txt),
+    # pour que des images voisines presque identiques ne faussent pas la note
+    files = [VAL / l.strip() for l in open(TEST_LIST) if l.strip()]
     tp = fp = fn = side_ok = 0
     missed, confused, times = collections.Counter(), collections.Counter(), []
     for f in files:

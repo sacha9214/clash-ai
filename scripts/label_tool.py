@@ -6,6 +6,8 @@ Clic sur une boîte : la sélectionner. Suppr : l'effacer. C : changer de camp (
 Glisser sur une zone vide : dessiner une boîte (carte = celle choisie dans la liste).
 Entrée : valider l'image et passer à la suivante. Échap : ignorer l'image (floue, menu…).
 Les images validées vont dans D:/clash-ai-dataset/real/{images,labels} au format YOLO (classes unité_camp).
+Une carte inconnue du modèle (sortie après avril 2024) est gardée : elle devient une nouvelle classe, ajoutée à la
+fin de D:/clash-ai-dataset/real/classes.json (les numéros existants ne bougent pas).
 """
 from __future__ import annotations
 
@@ -18,9 +20,33 @@ import yaml
 
 DATA = Path("D:/clash-ai-dataset")
 REAL = DATA / "real"
-NAMES = yaml.safe_load(open(DATA / "data.yaml"))["names"]
-CLASS_ID = {n: i for i, n in NAMES.items()}
-UNITS = sorted({n.rsplit("_", 1)[0] for n in NAMES.values()})
+# Liste des classes des images réelles : celles du modèle (data.yaml), puis les NOUVELLES cartes ajoutées ici
+# (sorties après les sprites de KataCR, avril 2024). Les numéros ne changent jamais : on ajoute à la fin.
+CLASSES_FILE = REAL / "classes.json"
+
+
+def load_classes() -> list[str]:
+    if CLASSES_FILE.exists():
+        return json.loads(CLASSES_FILE.read_text(encoding="utf-8"))
+    names = yaml.safe_load(open(DATA / "data.yaml"))["names"]
+    return [names[i] for i in sorted(names)]
+
+
+CLASSES = load_classes()
+
+
+def class_id(key: str) -> int:
+    """Numéro de la classe « unité_camp » ; une carte inconnue devient une nouvelle classe."""
+    if key not in CLASSES:
+        CLASSES.append(key)
+        REAL.mkdir(parents=True, exist_ok=True)
+        CLASSES_FILE.write_text(json.dumps(CLASSES, ensure_ascii=False, indent=0), encoding="utf-8")
+        print("nouvelle carte ajoutée :", key)
+    return CLASSES.index(key)
+
+
+def units() -> list[str]:
+    return sorted({n.rsplit("_", 1)[0] for n in CLASSES})
 
 PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Étiquetage</title>
 <style>
@@ -33,7 +59,8 @@ input{width:100%;padding:6px;font-size:14px}.k{color:#9ab}#list div{padding:2px 
 <canvas id="c" width="568" height="896"></canvas>
 <div id="side">
 <div id="stat"></div>
-<p>Carte pour les nouvelles boîtes / la boîte sélectionnée :</p>
+<p>Carte pour les nouvelles boîtes / la boîte sélectionnée<br><span class="k">(une carte absente de la liste :
+tape son nom, ex. « goblin-machine » — elle devient une nouvelle classe)</span></p>
 <input id="cls" list="units" placeholder="ex. knight"><datalist id="units"></datalist>
 <button id="apply">Renommer la sélection</button>
 <button id="flip">Changer de camp (C)</button>
@@ -91,7 +118,7 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         elif self.path == "/api/units":
-            self._json(UNITS)
+            self._json(units())
         elif self.path == "/api/next":
             pending = sorted((REAL / "pending").glob("*.json"))
             done = len(list((REAL / "labels").glob("*.txt"))) if (REAL / "labels").exists() else 0
@@ -120,11 +147,12 @@ class Handler(BaseHTTPRequestHandler):
             (REAL / "labels").mkdir(parents=True, exist_ok=True)
             lines = []
             for b in req["boxes"]:
-                key = f"{b['name']}_{int(b['side'])}"
-                if key not in CLASS_ID:
-                    continue                 # carte inconnue du modèle (nouvelle carte) : ignorée pour l'instant
+                name = b["name"].strip().lower().replace(" ", "-")
+                if not name:
+                    continue
+                key = f"{name}_{int(b['side'])}"
                 x0, y0, x1, y1 = b["box"]
-                lines.append(f"{CLASS_ID[key]} {(x0 + x1) / 2:.6f} {(y0 + y1) / 2:.6f} {x1 - x0:.6f} {y1 - y0:.6f}")
+                lines.append(f"{class_id(key)} {(x0 + x1) / 2:.6f} {(y0 + y1) / 2:.6f} {x1 - x0:.6f} {y1 - y0:.6f}")
             (REAL / "labels" / f"{name}.txt").write_text("\n".join(lines))
             shutil.move(src_img, REAL / "images" / f"{name}.jpg")
             src_json.unlink(missing_ok=True)
