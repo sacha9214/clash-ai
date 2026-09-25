@@ -64,46 +64,57 @@ class Opponent:
     seen_ids: set[int] = field(default_factory=set)
     recent: dict[str, tuple[float, int]] = field(default_factory=dict)   # carte -> (instant, unités vues)
     prev_counts: dict[str, int] = field(default_factory=dict)
-    pending: dict[str, float] = field(default_factory=dict)
+    pending: dict[int, tuple[str, float]] = field(default_factory=dict)
 
     def update(self, units, now: float | None = None, frame_h: int = 1280) -> list[str]:
         """Met à jour avec les unités détectées. Renvoie les cartes que l'ennemi vient de poser.
 
-        Robuste au bruit du détecteur : une carte n'est comptée que si le NOMBRE
-        d'unités ennemies de ce type augmente, qu'une nouvelle unité est apparue
-        côté ennemi (on ne peut poser que chez soi), et que ça tient sur 2 images.
+        Une carte posée = une unité qui APPARAÎT (nouvel identifiant de suivi) dans la
+        moitié ennemie — on ne peut poser que chez soi, donc tout ce qui naît là-haut
+        est à lui, quel que soit le camp que le détecteur a deviné. Elle doit être revue
+        sur l'analyse suivante (sinon c'est du bruit). Plusieurs unités du même type
+        dans la même seconde et demie (3 gobelins) = une seule carte.
         Les sorts sont ignorés (effets trop brefs, confondus avec les nôtres)."""
         now = now or time.time()
         rate = REGEN * (2 if now - self.start > DOUBLE_AFTER else 1)
         self.elixir = min(MAX_ELIXIR, self.elixir + (now - self.last_t) * rate)
         self.last_t = now
-        counts, fresh = {}, {}
-        for u in units:
-            if not u.enemy or u.name in SPAWNED or u.name not in UNIT2CARD or u.name in SPELLS:
+        alive = {u.track_id: u for u in units if u.track_id >= 0}
+        new_cards = []
+        # 1) confirmer les candidats de l'analyse précédente encore présents
+        for tid, (card, t0) in list(self.pending.items()):
+            if tid in alive:
+                del self.pending[tid]
+                t_last = self.recent.get(card, (-1e9, 0))[0]
+                # règle du cycle : une carte jouée ne revient en main qu'après 4 autres cartes
+                if card in self.played[-4:]:
+                    continue
+                if now - t_last > 1.5:
+                    self.recent[card] = (now, 1)
+                    _, cost, _ = next(v for v in UNIT2CARD.values() if v[0] == card)
+                    self.elixir = max(0.0, self.elixir - cost)
+                    self.played.append(card)
+                    new_cards.append(card)
+            elif now - t0 > 2.0:
+                del self.pending[tid]
+        # 2) nouveaux candidats : unités nées dans la moitié ennemie
+        prev = getattr(self, "_prev_pos", [])
+        for tid, u in alive.items():
+            if tid in self.seen_ids:
+                continue
+            self.seen_ids.add(tid)
+            if u.name in SPAWNED or u.name in SPELLS or u.name not in UNIT2CARD:
                 continue
             card = UNIT2CARD[u.name][0]
-            counts[card] = counts.get(card, 0) + 1
-            if u.track_id >= 0 and u.track_id not in self.seen_ids:
-                self.seen_ids.add(u.track_id)
-                if u.center[1] < 0.52 * frame_h:          # apparue côté ennemi
-                    fresh[card] = fresh.get(card, 0) + 1
-        new_cards = []
-        for card, n in counts.items():
-            prev = self.prev_counts.get(card, 0)
-            _, cost, per = next(v for v in UNIT2CARD.values() if v[0] == card)
-            if fresh.get(card) and n > prev:
-                pend = self.pending.get(card)
-                if pend and now - pend < 2.0:              # confirmé sur une 2e image
-                    self.pending.pop(card)
-                    t_last = self.recent.get(card, (-1e9, 0))[0]
-                    if now - t_last > 2.5:                 # pas le même groupe qui finit d'apparaître
-                        self.recent[card] = (now, n)
-                        self.elixir = max(0.0, self.elixir - cost)
-                        self.played.append(card)
-                        new_cards.append(card)
-                else:
-                    self.pending[card] = now
-        self.prev_counts = counts
+            # le suivi perd parfois une unité et lui redonne un nouveau numéro : si une unité
+            # de la même carte était là, tout près, à l'analyse précédente, ce n'est pas une nouvelle carte
+            if any(c == card and abs(x - u.center[0]) < 0.12 * frame_h / 2.2 and abs(y - u.center[1]) < 0.08 * frame_h
+                   for c, x, y in prev):
+                continue
+            if u.center[1] < 0.43 * frame_h:
+                self.pending[tid] = (card, now)
+        self._prev_pos = [(UNIT2CARD[u.name][0], u.center[0], u.center[1]) for u in units
+                          if u.name in UNIT2CARD and u.enemy]
         return new_cards
 
     @property
@@ -129,6 +140,16 @@ class Opponent:
     def can_afford(self) -> list[str]:
         costs = {c: cost for c, cost, _ in UNIT2CARD.values()}
         return [c for c in self.hand if costs.get(c, 99) <= self.elixir]
+
+    def banner(self) -> list[str]:
+        """Trois lignes courtes pour le bandeau du haut."""
+        known = len(self.deck)
+        l1 = f"ADVERSAIRE : elixir ~{self.elixir:.0f}/10   cartes vues {known}/8"
+        l2 = "deck : " + (", ".join(self.deck) or "?")
+        l3 = ("main probable : " + (", ".join(self.hand) or "?")) if known >= 5 else "main : attendre 5 cartes vues"
+        if self.next_in:
+            l3 += f"  | revient : {self.next_in}"
+        return [l1, l2, l3]
 
     def summary(self) -> list[str]:
         lines = [f"ennemi : elixir ~{self.elixir:.1f}  deck connu {len(self.deck)}/8"]

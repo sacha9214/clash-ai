@@ -13,7 +13,8 @@ from clashai import hand as H
 from clashai.actions import play_card
 from clashai.brain import Brain
 from clashai.detect import Detector, draw
-from clashai.opponent import Opponent
+from clashai.opponent import UNIT2CARD, Opponent
+import numpy as np
 
 
 def _ascii(s: str) -> str:
@@ -40,7 +41,7 @@ class Agent:
             self.opp_log.append({"t": round(now, 2), "card": c, "elixir_after": round(self.opp.elixir, 1)})
         self.brain.opp_elixir = self.opp.elixir
         d = self.brain.decide(seen, hand, ready, el, now)
-        info = [f"elixir {el:.1f}  main : " + ", ".join(c or "?" for c in hand)] + self.opp.summary()
+        info = [f"elixir {el:.1f}  main : " + ", ".join(c or "?" for c in hand)]
         return units, d, info, hand, el
 
     def _learn_new_card(self, img, hand, ready):
@@ -67,6 +68,12 @@ class Agent:
 
     def annotate(self, img, units, d, info):
         v = img.copy()
+        # bandeau du haut : ce que l'IA sait de l'adversaire
+        h, w = v.shape[:2]
+        v[0:78] = (v[0:78] * 0.2).astype(v.dtype)
+        for i, line in enumerate(self.opp.banner()):
+            cv2.putText(v, _ascii(line), (6, 20 + 24 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.47,
+                        (80, 200, 255) if i == 0 else (255, 255, 255), 1, cv2.LINE_AA)
         draw(v, units, self.det.trails)
         if d:
             h, w = v.shape[:2]
@@ -76,8 +83,8 @@ class Agent:
             info = [d.reason] + info
         for i, line in enumerate(info):
             line = _ascii(line)
-            cv2.putText(v, line, (8, 80 + 22 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 0), 4, cv2.LINE_AA)
-            cv2.putText(v, line, (8, 80 + 22 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
+            cv2.putText(v, line, (8, 100 + 22 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 0), 4, cv2.LINE_AA)
+            cv2.putText(v, line, (8, 100 + 22 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
         return v
 
     def play_battle(self, dev, game_id: str, params: dict | None = None) -> dict:
@@ -100,6 +107,9 @@ class Agent:
             now = time.time()
             fps, t_prev = 1 / max(now - t_prev, 1e-3), now
             units, d, info, hand, el = self.think(img, now, fps)
+            if now - getattr(self, "_last_snap", 0) > 5:
+                self._last_snap = now
+                cv2.imwrite(os.path.join(folder, f"state{int(now) % 100000:05d}.jpg"), self.annotate(img, units, None, info))
             if d and now - last_play > 0.8:
                 h, w = img.shape[:2]
                 ok = play_card(dev, d.slot, (int(d.x * w), int(d.y * h)))
@@ -116,6 +126,14 @@ class Agent:
         with open(os.path.join(folder, "decisions.jsonl"), "w") as f:
             for row in log:
                 f.write(json.dumps(row, default=str) + "\n")
+        # résumé de fin de match : l'adversaire tel que l'IA l'a compris
+        card = np.zeros((170, 578, 3), np.uint8)
+        lines = [f"Deck adverse ({len(self.opp.deck)}/8 vues) :", ", ".join(self.opp.deck[:4]),
+                 ", ".join(self.opp.deck[4:8]), f"Cartes jouees : {len(self.opp.played)}   elixir depense ~" +
+                 str(sum(next(v[1] for v in UNIT2CARD.values() if v[0] == c) for c in self.opp.played))]
+        for i, line in enumerate(lines):
+            cv2.putText(card, _ascii(line), (10, 32 + 38 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.62, (255, 255, 255), 1, cv2.LINE_AA)
+        cv2.imwrite(os.path.join(folder, "opponent_summary.jpg"), card)
         with open(os.path.join(folder, "opponent.json"), "w") as f:
             json.dump({"played": self.opp_log, "deck": self.opp.deck}, f, indent=1)
         return {"game": game_id, "played": n, "refused": refused, "params": self.brain.p,
