@@ -36,12 +36,10 @@ Colle ce fichier à Claude Code pour reprendre.
   les règles (vidéos jamais vues). Règles : côté de l'ennemi le plus avancé, Canon à l'avance / contre tout le sol.
 - Nouvelles cartes / héros / évolutions : rendus du Fan Kit officiel (`scripts/fankit_*.py`, D:\clash-ai-datasetankit),
   quelques boîtes réelles (label_tool.py, bug d'écrasement corrigé), pseudo-étiquetage après v2.
-- Chaîne GPU automatique (processus Windows, hors Claude) :
-  1. analyse des 30 h de vidéos -> ~11:00 -> réentraînement placement (`runs/videos/placement_train.txt`)
-  2. `finetune_detector.py` (points faibles) -> ~15:30 -> `runs/detector/FINETUNE_REPORT.md`
-  3. `train_v2.py` (nouvelles cartes) -> ~00:00 -> `runs/detector/V2_REPORT.md`
-  4. `pseudo_label.py` -> `runs/detector/pseudo_labels.json` (à vérifier à l'œil avant réentraînement)
-  5. analyse des +70 h de vidéos (objectif 100 h) -> placement réentraîné (`runs/videos/placement_train_100h.txt`)
+- Tout passe par `scripts/pipeline.py` (processus Windows, journal `runs/pipeline.log`) : téléchargement jusqu'à
+  100 h + analyse avec NOTRE YOLO11 TensorRT (6 vidéos en parallèle, CPU saturé) -> comparaison + modèle de placement
+  -> réglage fin du détecteur -> v2 (nouvelles cartes) -> pseudo-étiquetage ; publie code, rapports (`results/`)
+  et petits modèles sur GitHub après chaque étape.
 - Pas de téléphone le 26/09 : aucun match ; tout reste à valider en match ensuite.
 
 ## Nuit du 25 au 26/09 (autonome, hors de Claude)

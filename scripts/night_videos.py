@@ -112,6 +112,7 @@ def pid_alive(pid: int) -> bool:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--hours", type=float, default=30.0)
+    ap.add_argument("--download-only", action="store_true", help="télécharger seulement (l'analyse est faite ailleurs)")
     ap.add_argument("--wait-pid", type=int, nargs="*", default=[],
                     help="attendre la fin de ces processus (entraînement, matchs) avant d'utiliser le GPU")
     a = ap.parse_args()
@@ -133,6 +134,9 @@ def main():
             with open(MANIFEST, "a", encoding="utf-8") as f:
                 f.write(json.dumps(v, ensure_ascii=False) + "\n")
     log(f"téléchargées : {len(new)}")
+    if a.download_only:
+        log("=== téléchargement terminé (analyse faite par pipeline.py) ===")
+        return
 
     for pid in a.wait_pid:
         log(f"attente de la fin du processus {pid} (GPU occupé)…")
