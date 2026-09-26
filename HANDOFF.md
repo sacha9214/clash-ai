@@ -37,7 +37,7 @@ Colle ce fichier à Claude Code pour reprendre.
 - Nouvelles cartes / héros / évolutions : rendus du Fan Kit officiel (`scripts/fankit_*.py`, D:\clash-ai-datasetankit),
   quelques boîtes réelles (label_tool.py, bug d'écrasement corrigé), pseudo-étiquetage après v2.
 - Tout passe par `scripts/pipeline.py` (processus Windows, journal `runs/pipeline.log`) : téléchargement jusqu'à
-  100 h + analyse avec NOTRE YOLO11 TensorRT (6 vidéos en parallèle, CPU saturé) -> comparaison + modèle de placement
+  50 h (arrêté à 53 h) + analyse avec NOTRE YOLO11 TensorRT (6 vidéos en parallèle, CPU saturé) -> comparaison + modèle de placement
   -> réglage fin du détecteur -> v2 (nouvelles cartes) -> pseudo-étiquetage ; publie code, rapports (`results/`)
   et petits modèles sur GitHub après chaque étape.
 - Pas de téléphone le 26/09 : aucun match ; tout reste à valider en match ensuite.
