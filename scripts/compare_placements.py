@@ -36,6 +36,8 @@ def to_phone(x: float, y: float, grid: dict, flip: bool) -> tuple[float, float]:
 
 
 def main():
+    # --rules-only : le cerveau SANS le modèle de placement (pour mesurer chaque option à part)
+    rules_only = "--rules-only" in sys.argv
     rows = []
     for f in sorted(glob.glob(str(ROOT / "runs/videos/*.jsonl"))):
         if f.endswith(".raw.jsonl") or not Path(f.replace(".jsonl", ".battles.json")).exists():
@@ -63,7 +65,7 @@ def main():
             near = [b for b in board if b.enemy and b.y > RIVER_Y - 0.02]
             threat = max(near, key=lambda b: b.y) if near else None
             context = f"défense : {threat.name}" if threat else "attaque / calme"
-            brain = Brain({"ignore_small": True})
+            brain = Brain({"ignore_small": True, "placement_model": not rules_only})
             d = brain.decide(board, [e["card"], None, None, None], [True, False, False, False], 10.0, e["t"])
             pro = PHONE.cell(*to_phone(e["x"], e["y"], grid, flip))
             rec = {"video": vid, "t": e["t"], "card": e["card"], "winner": e.get("winner") == e["side"],
@@ -73,7 +75,7 @@ def main():
                 rec["dist"] = float(np.hypot(d.tile[0] - pro[0], d.tile[1] - pro[1]))
                 rec["same_lane"] = (d.tile[0] < 9) == (pro[0] < 9)
             rows.append(rec)
-    out = ROOT / "runs/videos/placement_compare.jsonl"
+    out = ROOT / ("runs/videos/placement_compare_rules.jsonl" if rules_only else "runs/videos/placement_compare.jsonl")
     with open(out, "w", encoding="utf-8") as fh:
         for r in rows:
             fh.write(json.dumps(r, ensure_ascii=False) + "\n")

@@ -50,19 +50,21 @@ def legal_mask(card: str) -> np.ndarray:
     return m
 
 
-def build_net(n_cards: int):
+def build_net(n_cards: int, width: int = 48):
     import torch
     from torch import nn
 
     class Net(nn.Module):
         def __init__(self):
             super().__init__()
+            w = width
             self.emb = nn.Embedding(n_cards, 64)
-            self.c1 = nn.Conv2d(N_CH, 48, 3, padding=1)
-            self.c2 = nn.Conv2d(48, 48, 3, padding=2, dilation=2)
-            self.film = nn.Linear(64, 96)
-            self.c3 = nn.Conv2d(48, 48, 3, padding=4, dilation=4)
-            self.c4 = nn.Conv2d(48, 1, 1)
+            self.c1 = nn.Conv2d(N_CH, w, 3, padding=1)
+            self.c2 = nn.Conv2d(w, w, 3, padding=2, dilation=2)
+            self.film = nn.Linear(64, 2 * w)
+            self.c3 = nn.Conv2d(w, w, 3, padding=4, dilation=4)
+            self.c3b = nn.Conv2d(w, w, 3, padding=1)
+            self.c4 = nn.Conv2d(w, 1, 1)
 
         def forward(self, x, card):
             h = torch.relu(self.c1(x))
@@ -70,6 +72,7 @@ def build_net(n_cards: int):
             g, b = self.film(self.emb(card)).chunk(2, dim=1)       # la carte module les caractéristiques
             h = h * (1 + g[:, :, None, None]) + b[:, :, None, None]
             h = torch.relu(self.c3(h))
+            h = torch.relu(self.c3b(h)) + h
             return self.c4(h)[:, 0]                                 # (B, ROWS, COLS) logits
 
     return Net()
@@ -82,7 +85,7 @@ class PlacementModel:
         import torch
         meta = json.loads((model_dir / "meta.json").read_text(encoding="utf-8"))
         self.cards = {c: i for i, c in enumerate(meta["cards"])}
-        self.net = build_net(len(self.cards))
+        self.net = build_net(len(self.cards), meta.get("width", 48))
         self.net.load_state_dict(torch.load(model_dir / "model.pt", map_location="cpu"))
         self.net.eval()
         self.torch = torch
@@ -90,12 +93,16 @@ class PlacementModel:
     def knows(self, card: str) -> bool:
         return card in self.cards
 
-    def predict(self, card: str, units, forbid=None) -> tuple[tuple[int, int], np.ndarray]:
+    def predict(self, card: str, units, forbid=None, lane: int | None = None) -> tuple[tuple[int, int], np.ndarray]:
+        """lane : 0 = gauche, 1 = droite (choisi par les règles) ; None = toute l'arène."""
         torch = self.torch
         with torch.no_grad():
             x = torch.from_numpy(features(units))[None]
             logit = self.net(x, torch.tensor([self.cards[card]]))[0].numpy()
         mask = legal_mask(card) if forbid is None else legal_mask(card) & ~forbid
+        if lane is not None:
+            cols = np.arange(COLS) < 9
+            mask = mask & (cols if lane == 0 else ~cols)[None, :]
         logit = np.where(mask, logit, -1e9)
         p = np.exp(logit - logit.max())
         p /= p.sum()

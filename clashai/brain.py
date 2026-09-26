@@ -203,7 +203,10 @@ class Brain:
         if (self.placer and DECK[d.card].kind != "spell" and self.placer.knows(d.card)
                 and not d.reason.startswith("défense : Tonneau")):
             units = [(u.name, u.enemy, *PHONE.to_tile(u.x, u.y)) for u in seen]
-            (c, r), _ = self.placer.predict(d.card, units, forbid=_tower_tiles())
+            # couloir choisi par les règles (côté de l'ennemi : ~80 % d'accord avec les pros), case exacte par le
+            # modèle ; une carte posée au centre par la règle (Canon…) laisse le modèle libre
+            rule_lane = _lane(d.x) if abs(d.x - 0.5) > 0.06 else None
+            (c, r), _ = self.placer.predict(d.card, units, forbid=_tower_tiles(), lane=rule_lane)
             d.x, d.y = PHONE.center(c, r)
             # la règle a choisi QUOI et QUAND ; l'endroit vient du modèle : on ne garde que la première partie
             d.reason = d.reason.split(" -> ")[0].split(" (")[0] + f" -> {d.card}, case apprise des pros ({c},{r})"
