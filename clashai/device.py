@@ -79,7 +79,7 @@ class Device:
     """
 
     def __init__(self, serial: str | None = None, max_size: int = 1280, max_fps: int = 60,
-                 bit_rate: int = 8_000_000):
+                 bit_rate: int = 20_000_000):   # 20 Mbit/s : moins de flou de compression sur les petites unités
         self.serial = serial or first_usb_device()
         self.max_size, self.max_fps, self.bit_rate = max_size, max_fps, bit_rate
         self.scid = random.randrange(1, 2**31)
