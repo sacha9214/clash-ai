@@ -1,25 +1,25 @@
 1515 coups de pros avec une carte de notre deck
 
 carte       coups  IA joue écart méd.  même couloir   (gagnants : écart)
-cannon        650      36%       2.0c          59%   (2.0c sur 102)
-knight        451      98%       6.3c          58%   (6.0c sur 225)
-valkyrie      161      99%       8.2c          55%   (9.0c sur 66)
-archers       107     100%       4.1c          73%   (6.4c sur 13)
-giant          82      79%       9.1c          63%   (8.5c sur 31)
-mini-pekka     64      98%       4.2c          70%   (3.5c sur 22)
+cannon        650      36%       2.0c          66%   (2.0c sur 102)
+knight        451      98%       6.1c          59%   (6.1c sur 225)
+valkyrie      161      99%       7.6c          54%   (7.6c sur 66)
+archers       107     100%       5.1c          56%   (7.1c sur 13)
+giant          82      79%       5.1c          54%   (3.6c sur 31)
+mini-pekka     64      98%       6.3c          60%   (5.9c sur 22)
 
 Plus gros désaccords (coups de gagnants) :
-  4YAqPCeOOtY 1470.1s knight     pro (0, 30) / IA (13, 19) (17 cases) — élixir plein : knight dans le couloir, prêt à contre-attaquer -> knight, case apprise des pros (13,19)
-  vcidk_NeZ5k  199.8s knight     pro (0, 30) / IA (13, 19) (17 cases) — élixir plein : knight dans le couloir, prêt à contre-attaquer -> knight, case apprise des pros (13,19)
-  s-dpcEULRdY  931.0s knight     pro (0, 29) / IA (13, 19) (16 cases) — élixir plein : knight dans le couloir, prêt à contre-attaquer -> knight, case apprise des pros (13,19)
-  vcidk_NeZ5k 2838.8s knight     pro (0, 29) / IA (13, 19) (16 cases) — élixir plein : knight dans le couloir, prêt à contre-attaquer -> knight, case apprise des pros (13,19)
-  vcidk_NeZ5k 1399.0s knight     pro (0, 29) / IA (16, 26) (16 cases) — élixir plein : knight dans le couloir, prêt à contre-attaquer -> knight, case apprise des pros (16,26)
-  L49GKPoNm_Q  821.2s knight     pro (0, 28) / IA (13, 19) (16 cases) — élixir plein : knight dans le couloir, prêt à contre-attaquer -> knight, case apprise des pros (13,19)
-  4Q3RLGphT40 2376.2s knight     pro (1, 29) / IA (13, 19) (16 cases) — élixir plein : knight dans le couloir, prêt à contre-attaquer -> knight, case apprise des pros (13,19)
-  JZ1QxmpKtzA  270.4s valkyrie   pro (1, 24) / IA (16, 25) (15 cases) — défense : miner -> valkyrie, case apprise des pros (16,25)
-  UbgnxTzAvOQ  764.2s knight     pro (17, 21) / IA (2, 22) (15 cases) — élixir plein : knight dans le couloir, prêt à contre-attaquer -> knight, case apprise des pros (2,22)
-  EgrgG3GhG-Y  171.6s knight     pro (2, 29) / IA (13, 19) (15 cases) — élixir plein : knight dans le couloir, prêt à contre-attaquer -> knight, case apprise des pros (13,19)
-  4Q3RLGphT40 1859.8s knight     pro (2, 21) / IA (16, 21) (14 cases) — élixir plein : knight dans le couloir, prêt à contre-attaquer -> knight, case apprise des pros (16,21)
-  EgrgG3GhG-Y  500.5s valkyrie   pro (16, 24) / IA (3, 19) (14 cases) — élixir plein : valkyrie dans le couloir, prêt à contre-attaquer -> valkyrie, case apprise des pros (3,19)
+  4YAqPCeOOtY 1470.1s knight     pro (0, 30) / IA (14, 22) (16 cases) — élixir plein : knight dans le couloir, prêt à contre-attaquer
+  UbgnxTzAvOQ  829.0s knight     pro (17, 29) / IA (3, 22) (16 cases) — élixir plein : knight dans le couloir, prêt à contre-attaquer
+  vcidk_NeZ5k 1345.4s knight     pro (0, 29) / IA (14, 22) (16 cases) — élixir plein : knight dans le couloir, prêt à contre-attaquer
+  wmZ6K4T6Ang 2084.0s knight     pro (16, 22) / IA (1, 24) (15 cases) — défense : royal-recruit (au sol) -> knight
+  TtWm6gvcG_Q 1116.2s knight     pro (16, 29) / IA (3, 22) (15 cases) — élixir plein : knight dans le couloir, prêt à contre-attaquer
+  JZ1QxmpKtzA 1111.2s knight     pro (17, 25) / IA (3, 22) (14 cases) — élixir plein : knight dans le couloir, prêt à contre-attaquer
+  YlnWVY40g6s  730.6s knight     pro (17, 19) / IA (3, 22) (14 cases) — élixir plein : knight dans le couloir, prêt à contre-attaquer
+  UbgnxTzAvOQ  764.2s knight     pro (17, 21) / IA (3, 22) (14 cases) — élixir plein : knight dans le couloir, prêt à contre-attaquer
+  g-Ft2Je92hE  185.4s mini-pekka pro (17, 23) / IA (3, 22) (14 cases) — élixir plein : mini-pekka dans le couloir, prêt à contre-attaquer
+  ul9SZGKRjHc 1160.6s knight     pro (4, 19) / IA (16, 26) (14 cases) — défense : royal-hog (au sol) -> knight
+  guIPd22GUCw  354.8s giant      pro (16, 22) / IA (6, 31) (13 cases) — attaque : Géant (derrière le Roi)
+  yMbEH6o_2lM 1704.4s valkyrie   pro (16, 25) / IA (3, 22) (13 cases) — élixir plein : valkyrie dans le couloir, prêt à contre-attaquer
 
 L'IA aurait attendu au lieu de jouer : {'cannon': 418, 'knight': 11, 'giant': 17, 'mini-pekka': 1, 'valkyrie': 1}

@@ -82,8 +82,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=25000)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--start", type=int, default=0, help="numéro de la première image (plusieurs processus en parallèle)")
     a = ap.parse_args()
-    rng = random.Random(a.seed)
+    rng = random.Random(a.seed + a.start)
 
     names_v1 = yaml.safe_load(open(DATA / "data.yaml"))["names"]
     classes = [names_v1[i] for i in sorted(names_v1)]
@@ -121,7 +122,7 @@ def main():
     # les nouvelles unités d'abord (2 chances sur 3), les connues en bonus
     new_pool = [c for c in renders if any(k.startswith(c + "_") for k in classes[len(names_v1):])]
     old_pool = [c for c in renders if c not in new_pool]
-    for k in range(a.n):
+    for k in range(a.start, a.start + a.n):
         base = rng.choice(bases)
         img = cv2.imread(str(base))
         H, W = img.shape[:2]
