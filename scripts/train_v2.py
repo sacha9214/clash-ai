@@ -75,6 +75,11 @@ def main():
     a = ap.parse_args()
     if sys.platform == "win32":
         ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000001)
+    hold = ROOT / "runs/HOLD"                 # matchs sur le téléphone en cours : le GPU doit rester libre
+    if hold.exists():
+        log("en attente : runs/HOLD existe (matchs sur le téléphone)")
+        while hold.exists():
+            time.sleep(30)
     for pid in a.wait_pid:
         log(f"attente de la fin du processus {pid}…")
         while pid_alive(pid):
