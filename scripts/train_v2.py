@@ -14,6 +14,7 @@ vidéos récentes (à vérifier à l'œil).
 from __future__ import annotations
 
 import argparse
+import os
 import ctypes
 import json
 import shutil
@@ -68,11 +69,53 @@ def add_real_labels() -> int:
     return n
 
 
+def train_with_watchdog(hours: float, start_from: str | None) -> None:
+    """Entraîne en surveillant : sous Windows, les processus qui chargent les images peuvent se bloquer
+    (le GPU affiche 100 % mais plus rien n'avance). Si last.pt n'est pas réécrit pendant STALL_MIN minutes,
+    on arrête et on repart de last.pt avec le temps restant."""
+    import subprocess
+    STALL_MIN = 75                              # une époque ~45 min à 1024 px + validation
+    t_end = time.time() + hours * 3600
+    weights = Path(start_from) if start_from else MODELS / "clashai_yolo11s.pt"
+    last = ROOT / f"runs/detector/{NAME}/weights/last.pt"
+    attempt = 0
+    while time.time() < t_end - 1800:
+        attempt += 1
+        left = round((t_end - time.time()) / 3600, 2)
+        cmd = [str(PY_YOLO), "scripts/train_yolo.py", "--model", str(weights), "--data", str(DATA / "data_v2.yaml"),
+               "--hours", str(left), "--lr0", "0.005" if attempt == 1 and not start_from else "0.003",
+               "--close-mosaic", "3", "--workers", "8", "--name", NAME, "--imgsz", str(IMGSZ), "--batch", "12"]
+        log(f"essai {attempt} : {left} h, depuis {weights.name}")
+        p = subprocess.Popen(cmd, cwd=ROOT, env=dict(os.environ, PYTHONIOENCODING="utf-8"),
+                             stdout=open(ROOT / f"runs/detector/train_v2_try{attempt}.txt", "w"), stderr=subprocess.STDOUT)
+        t_start = time.time()
+        while p.poll() is None:
+            time.sleep(60)
+            ref = last.stat().st_mtime if last.exists() and last.stat().st_mtime > t_start else t_start
+            if time.time() - ref > STALL_MIN * 60:
+                log(f"bloqué depuis {STALL_MIN} min : arrêt et reprise depuis last.pt")
+                subprocess.run(["taskkill", "/F", "/T", "/PID", str(p.pid)], capture_output=True)
+                break
+        if p.poll() == 0:
+            log("entraînement terminé normalement")
+            return
+        if last.exists():
+            keep = ROOT / f"runs/detector/{NAME}_resume.pt"      # le prochain essai réécrit le dossier
+            keep.write_bytes(last.read_bytes())
+            best = last.with_name("best.pt")
+            if best.exists():
+                best.with_name("best_before_resume.pt").write_bytes(best.read_bytes())
+            weights = keep
+    log("temps écoulé")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--hours", type=float, default=8.0)
     ap.add_argument("--n-fk", type=int, default=25000)
     ap.add_argument("--wait-pid", type=int, nargs="*", default=[])
+    ap.add_argument("--start-from", default=None, help="reprendre depuis ces poids (ex. last.pt d'un essai bloqué)")
+    ap.add_argument("--skip-prep", action="store_true", help="images déjà prêtes : passer directement à l'entraînement")
     a = ap.parse_args()
     if sys.platform == "win32":
         ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000001)
@@ -86,7 +129,8 @@ def main():
         while pid_alive(pid):
             time.sleep(60)
     log("=== entraînement v2 : début ===")
-    have = len(list((DATA / "images/train_fk").glob("fk_*.jpg"))) if (DATA / "images/train_fk").exists() else 0
+    have = a.n_fk if a.skip_prep else None
+    have = have if have is not None else len(list((DATA / "images/train_fk").glob("fk_*.jpg"))) if (DATA / "images/train_fk").exists() else 0
     if have >= a.n_fk:
         log(f"images Fan Kit déjà prêtes : {have}")         # générées pendant que le GPU faisait autre chose
     else:
@@ -95,9 +139,7 @@ def main():
 
     code, out = run([PY_YOLO, "scripts/eval_yolo.py", MODELS / "clashai_yolo11s.engine"])
     before = last_eval(out)
-    run([PY_YOLO, "scripts/train_yolo.py", "--model", MODELS / "clashai_yolo11s.pt", "--data", DATA / "data_v2.yaml",
-         "--hours", a.hours, "--lr0", "0.005", "--close-mosaic", "3", "--workers", "11", "--name", NAME,
-         "--imgsz", IMGSZ, "--batch", "12"])     # 1024 px : plus de détails pour les petites unités
+    train_with_watchdog(a.hours, a.start_from)
     found = sorted(ROOT.glob(f"runs/**/{NAME}/weights/best.pt"), key=lambda p: p.stat().st_mtime)
     if not found:
         log("pas de modèle : voir le journal")
