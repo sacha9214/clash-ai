@@ -1,7 +1,7 @@
 """Fait jouer le cerveau v0 (règles tactiques) en direct, ou à blanc sur une vidéo.
 
-  .venv-katacr/bin/python scripts/play_smart.py                 # joue sur le téléphone
-  .venv-katacr/bin/python scripts/play_smart.py --dry video.mp4 # décisions seules, sur un enregistrement
+  .venv-yolo\Scripts\python scripts/play_smart.py                 # joue sur le téléphone
+  .venv-yolo\Scripts\python scripts/play_smart.py --dry video.mp4 # décisions seules, sur un enregistrement
 """
 import argparse
 import os

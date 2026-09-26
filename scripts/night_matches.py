@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 LOG = ROOT / "runs/games/night_matches.log"
 JOURNAL = ROOT / "runs/games/journal.jsonl"
 STOP = ROOT / "runs/games/STOP"
-PY = ROOT / ".venv-katacr/Scripts/python.exe"
+PY = ROOT / ".venv-yolo/Scripts/python.exe"   # notre détecteur YOLO11 TensorRT
 
 
 def log(msg: str) -> None:

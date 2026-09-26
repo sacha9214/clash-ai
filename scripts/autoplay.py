@@ -4,7 +4,7 @@
 Tout écran inconnu qui dure -> capture + arrêt, pour ne jamais cliquer à l'aveugle
 (boutique, offres payantes…).
 
-  .venv-katacr/bin/python scripts/autoplay.py --games 10
+  .venv-yolo\Scripts\python scripts/autoplay.py --games 10
 """
 import argparse
 import json
