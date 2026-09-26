@@ -81,6 +81,7 @@ def main():
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--skip-download", action="store_true")
     ap.add_argument("--skip-placement", action="store_true", help="modèle de placement déjà entraîné à part")
+    ap.add_argument("--skip-finetune", action="store_true", help="réglage fin du détecteur déjà fait")
     a = ap.parse_args()
     if sys.platform == "win32":
         ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000001)
@@ -121,8 +122,9 @@ def main():
       github("Placement model retrained on all analyzed videos")
 
     # 4-6. détecteur
-    step("réglage fin du détecteur", [PY_YOLO, "scripts/finetune_detector.py", "--hours", "4"], ROOT / "runs/detector/finetune.out.txt")
-    github("Detector fine-tuned on its weak spots")
+    if not a.skip_finetune:
+      step("réglage fin du détecteur", [PY_YOLO, "scripts/finetune_detector.py", "--hours", "4"], ROOT / "runs/detector/finetune.out.txt")
+      github("Detector fine-tuned on its weak spots")
     step("entraînement v2", [PY_YOLO, "scripts/train_v2.py", "--hours", "8"], ROOT / "runs/detector/train_v2.out.txt")
     github("Detector v2: new cards, heroes and evolutions")
     found = sorted(ROOT.glob("runs/**/yolo11s_cr_v2/weights/best.pt"), key=lambda p: p.stat().st_mtime)

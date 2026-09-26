@@ -10,6 +10,8 @@ Tourne dans .venv-yolo (ultralytics 8.4, torch cu128, TensorRT).
 from __future__ import annotations
 
 import collections
+import json
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -22,7 +24,7 @@ WEIGHTS = ROOT / "models/yolo/clashai_yolo11s.engine"      # repli : le .pt à c
 # Recadrage de l'arène dans l'écran (fractions x0, y0, largeur, hauteur), comme pour KataCR
 ARENA = (0.020, 0.035, 0.960, 0.684)
 ARENA_SIZE = (568, 896)
-IMGSZ = 896
+IMGSZ = 896                     # remplacé par models/yolo/clashai_yolo11s.json si le modèle adopté en demande une autre
 UI = {"bar", "bar-level", "tower-bar", "king-tower-bar", "dagger-duchess-tower-bar", "elixir",
       "clock", "emote", "evolution-symbol", "ice-spirit-evolution-symbol", "text", "selected"}
 
@@ -34,6 +36,7 @@ class Unit:
     enemy: bool
     conf: float
     box: tuple[int, int, int, int]   # x0, y0, x1, y1 dans l'image du flux
+    coasted: bool = False            # pas vue sur cette image : gardée de mémoire (courte disparition)
 
     @property
     def center(self) -> tuple[int, int]:
@@ -47,11 +50,16 @@ class Detector:
         if not w.exists():
             w = w.with_suffix(".pt")
         self.model = YOLO(str(w), task="detect")
+        side = w.with_suffix(".json")
+        self.imgsz = json.loads(side.read_text())["imgsz"] if side.exists() else IMGSZ
         self.device = device or 0
         self.track, self.iou = track, iou
         self.conf = 0.1 if track else conf      # ByteTrack exploite aussi les détections faibles
         self.trails: dict[int, collections.deque] = {}
         self.side_votes: dict[int, collections.deque] = {}   # suivi -> votes récents (+conf ennemi, -conf allié)
+        # mémoire courte : une unité suivie qui disparaît moins de COAST_S secondes (petite unité ratée sur une
+        # image, masquée par un effet) est gardée à sa position prévue au lieu de « clignoter »
+        self.memory: dict[int, tuple[Unit, float, float, float]] = {}   # suivi -> (unité, instant, vx, vy en px/s)
         self._fresh = True
         self.tracker = self                      # interface de detect_katacr : det.tracker.reset()
         self.on_arena(np.zeros((ARENA_SIZE[1], ARENA_SIZE[0], 3), np.uint8))   # chauffe (TensorRT)
@@ -62,6 +70,7 @@ class Detector:
         self._fresh = True
         self.trails.clear()
         self.side_votes.clear()
+        self.memory.clear()
 
     def _crop(self, frame: np.ndarray) -> tuple[np.ndarray, tuple[float, float, float, float]]:
         h, w = frame.shape[:2]
@@ -77,7 +86,7 @@ class Detector:
     def on_arena(self, crop: np.ndarray, offset=(0, 0, 1.0, 1.0)) -> list[Unit]:
         """Détecte sur une arène déjà recadrée en 568x896 ; offset replace les boîtes dans l'image source."""
         ox, oy, sx, sy = offset
-        kw = dict(imgsz=IMGSZ, conf=self.conf, iou=self.iou, verbose=False, device=self.device)   # moteur TensorRT déjà en FP16
+        kw = dict(imgsz=self.imgsz, conf=self.conf, iou=self.iou, verbose=False, device=self.device)   # moteur TensorRT déjà en FP16
         if self.track:
             r = self.model.track(crop, persist=not self._fresh, tracker="bytetrack.yaml", **kw)[0]
             self._fresh = False
@@ -99,8 +108,39 @@ class Detector:
                     v.append(conf if enemy else -conf)          # décidé sur ses 3 premières images…
                 enemy = sum(v) > 0                              # …puis figé pour toute sa vie
             units.append(Unit(int(tid), name, enemy, float(conf), box))
-        self._update_trails(units)
+        if self.track:
+            units = self._coast(units)
+        self._update_trails([u for u in units if not u.coasted])
         return units
+
+    COAST_S = 0.4
+
+    def _coast(self, units: list[Unit]) -> list[Unit]:
+        now = time.perf_counter()
+        seen = {u.track_id for u in units if u.track_id >= 0}
+        for u in units:
+            if u.track_id < 0:
+                continue
+            old = self.memory.get(u.track_id)
+            vx = vy = 0.0
+            if old:
+                dt = max(now - old[1], 1e-3)
+                vx = 0.5 * old[2] + 0.5 * (u.center[0] - old[0].center[0]) / dt     # vitesse lissée
+                vy = 0.5 * old[3] + 0.5 * (u.center[1] - old[0].center[1]) / dt
+            self.memory[u.track_id] = (u, now, vx, vy)
+        out = list(units)
+        for tid, (u, t, vx, vy) in list(self.memory.items()):
+            if tid in seen:
+                continue
+            age = now - t
+            if age > self.COAST_S or "tower" in u.name:
+                if age > 2.0:
+                    del self.memory[tid]
+                continue
+            dx, dy = int(vx * age), int(vy * age)
+            out.append(Unit(tid, u.name, u.enemy, u.conf * 0.9, (u.box[0] + dx, u.box[1] + dy, u.box[2] + dx, u.box[3] + dy),
+                            coasted=True))
+        return out
 
     def _update_trails(self, units: list[Unit]):
         alive = set()

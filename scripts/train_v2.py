@@ -31,6 +31,7 @@ night_detector.LOG = ROOT / "runs/detector/train_v2.log"
 DATA = Path("D:/clash-ai-dataset")
 MODELS = ROOT / "models/yolo"
 NAME = "yolo11s_cr_v2"
+IMGSZ = 1024
 
 
 def pid_alive(pid: int) -> bool:
@@ -95,15 +96,16 @@ def main():
     code, out = run([PY_YOLO, "scripts/eval_yolo.py", MODELS / "clashai_yolo11s.engine"])
     before = last_eval(out)
     run([PY_YOLO, "scripts/train_yolo.py", "--model", MODELS / "clashai_yolo11s.pt", "--data", DATA / "data_v2.yaml",
-         "--hours", a.hours, "--lr0", "0.005", "--close-mosaic", "3", "--workers", "11", "--name", NAME])
+         "--hours", a.hours, "--lr0", "0.005", "--close-mosaic", "3", "--workers", "11", "--name", NAME,
+         "--imgsz", IMGSZ, "--batch", "12"])     # 1024 px : plus de détails pour les petites unités
     found = sorted(ROOT.glob(f"runs/**/{NAME}/weights/best.pt"), key=lambda p: p.stat().st_mtime)
     if not found:
         log("pas de modèle : voir le journal")
         return
     best = found[-1]
-    run([PY_YOLO, "-c", f"from ultralytics import YOLO; YOLO(r'{best}').export(format='engine', half=True, imgsz=896, device=0)"])
+    run([PY_YOLO, "-c", f"from ultralytics import YOLO; YOLO(r'{best}').export(format='engine', half=True, imgsz={IMGSZ}, device=0)"])
     engine = best.with_suffix(".engine")
-    code, out = run([PY_YOLO, "scripts/eval_yolo.py", engine if engine.exists() else best])
+    code, out = run([PY_YOLO, "scripts/eval_yolo.py", engine if engine.exists() else best, f"--imgsz={IMGSZ}"])
     after = last_eval(out)
     ok = bool(before and after and after["f1"] >= before["f1"] - 0.005)   # gagner des cartes sans rien perdre
     if ok and engine.exists():
@@ -111,6 +113,7 @@ def main():
             shutil.copy(MODELS / f"clashai_yolo11s{ext}", MODELS / f"clashai_yolo11s_before_v2{ext}")
         shutil.copy(best, MODELS / "clashai_yolo11s.pt")
         shutil.copy(engine, MODELS / "clashai_yolo11s.engine")
+        (MODELS / "clashai_yolo11s.json").write_text(json.dumps({"imgsz": IMGSZ}))   # l'IA lit la taille ici
     lines = ["# Détecteur v2 (nouvelles cartes, héros, évolutions)", "",
              "| Modèle | Précision | Rappel | F1 (cartes connues) | Camp | ms/image |", "|---|---|---|---|---|---|"]
     for n, r in (("Avant", before), ("v2", after)):
