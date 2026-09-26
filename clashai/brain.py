@@ -229,6 +229,14 @@ class Brain:
             if d:
                 self.last_defense_lane = _lane(d.x)
             return d
+        # Canon posé à l'avance : son tank ou son Cochon descend vers le pont (38 % des Canons des pros)
+        coming = [e for e in enemies if (e.name in TANK_UNITS or e.name in FAST_BUILDING_HUNTERS) and e.name not in AIR_UNITS
+                  and RIVER_Y - 6 * PHONE.th < e.y <= RIVER_Y and e.vy >= 0]
+        if coming and "cannon" in playable:
+            t = max(coming, key=lambda e: e.y)
+            row = OWN_FIRST_ROW + (4 if t.name in FAST_BUILDING_HUNTERS else 6 if t.name in SLOW_TANKS else 3)
+            x, y = PHONE.center(8 if t.x < 0.5 else 9, row)
+            return Decision("cannon", playable["cannon"], x, y, f"canon à l'avance : {t.name} arrive vers le pont")
         # garder le contre de sa grosse menace (Géant, Cochon…) tant qu'elle peut revenir dans sa main
         keep = set()
         if set(self.opp_hand) & WIN_CONDITIONS:
@@ -312,7 +320,8 @@ class Brain:
         else:
             order = ["knight", "valkyrie", "mini-pekka", "musketeer", "archers", "minions"]
         # Canon : le bâtiment au centre attire les tanks (Géant, Hog…) entre les deux tours
-        if "cannon" in playable and not is_air and (is_tank or t.name in FAST_BUILDING_HUNTERS):
+        if "cannon" in playable and not is_air and (is_tank or t.name in FAST_BUILDING_HUNTERS or t.name in SINGLE_MELEE
+                                                     or swarm >= 2 or _cost(t.name) >= 3):
             col = 8 if lane_x < 0.5 else 9             # centre, côté de la menace
             if t.name in FAST_BUILDING_HUNTERS:
                 row, why = OWN_FIRST_ROW + 4, "4 cases sous la rivière : le Cochon est dévié entre les 2 tours"
@@ -357,12 +366,26 @@ class Brain:
     def _tower_low(self, lane: int) -> bool:
         return self.match is not None and self.match.our_hp[lane] < 0.35
 
-    def _attack_lane(self, seen: list[Seen]) -> int:
-        """Une tour princesse ennemie tombée : on attaque ce couloir (leur Roi y est à découvert)."""
+    @staticmethod
+    def _enemy_lane(seen: list[Seen]) -> int | None:
+        """Le côté où joue l'ennemi : celui de son unité la plus avancée vers nous, sinon celui où il en a le plus."""
+        enemies = [s for s in seen if s.enemy]
+        if not enemies:
+            return None
+        return _lane(max(enemies, key=lambda s: s.y).x)
+
+    def _attack_lane(self, seen: list[Seen], now: float | None = None) -> int:
+        """Où jouer nos troupes. Vidéos (39 vidéos, 447 coups de pros avec nos cartes) : ils jouent du côté de
+        l'ennemi le plus avancé dans 76-86 % des cas, Géant compris. Avant tout : une tour ennemie tombée."""
         if self.match is not None:
             dead = [l for l in (0, 1) if not self.match.enemy_alive[l]]
             if len(dead) == 1:
                 return dead[0]
+        lane = self._enemy_lane(seen)
+        if lane is not None:
+            return lane
+        if now is not None and self.last_own_play and now - self.last_own_play[1] < 15:
+            return self.last_own_play[0]            # rien en face : on reste avec nos troupes
         return self._weak_lane(seen)
 
     def _attack(self, seen: list[Seen], playable: dict, elixir: float, now: float) -> Decision | None:
@@ -383,12 +406,8 @@ class Brain:
         if self.p.get("giant_when_counter_out") and known and not known & set(self.opp_hand):
             giant_at -= 2
         if "giant" in playable and (elixir >= giant_at or punish):
-            lane = self._attack_lane(seen)
+            lane = self._attack_lane(seen, now if self.p["counter_push"] else None)
             tower_down = self.match is not None and not all(self.match.enemy_alive.values())
-            if self.p["counter_push"] and not tower_down and self.last_own_play and now - self.last_own_play[1] < 15:
-                # les pros empilent le Géant dans le couloir où ils viennent de jouer (5/5 dans les vidéos) :
-                # il avance avec nos troupes déjà sur place (contre-attaque ou poussée)
-                lane = self.last_own_play[0]
             self.giant_lane, self.giant_time = lane, now
             spot = self.p["giant_spot"]
             if spot == "back" and set(self.opp_deck) & PULL_BUILDINGS:
@@ -427,10 +446,9 @@ class Brain:
                 # une seule Flèche ne peut plus les prendre ensemble
                 x, y = _clamp_own(0.5, OWN_TOWER_Y + 0.0)
                 return Decision(card, playable[card], x, y, "rien à faire : archères séparées au centre")
-            if card in ("mini-pekka", "knight"):
-                # les pros les jouent dans un couloir, rangées 20-25 (vidéos), jamais derrière le Roi
-                lane = self.last_own_play[0] if self.last_own_play and now - self.last_own_play[1] < 15 \
-                    else self._attack_lane(seen)
+            if card in ("mini-pekka", "knight", "valkyrie"):
+                # les pros les jouent dans un couloir, rangées 19-25 (vidéos), jamais derrière le Roi
+                lane = self._attack_lane(seen, now)
                 x, y = PHONE.center(3 if lane == 0 else 14, OWN_FIRST_ROW + 5)
                 return Decision(card, playable[card], x, y, f"élixir plein : {card} dans le couloir, prêt à contre-attaquer")
             if card:
