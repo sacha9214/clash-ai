@@ -51,6 +51,7 @@ class Detector:
         self.track, self.iou = track, iou
         self.conf = 0.1 if track else conf      # ByteTrack exploite aussi les détections faibles
         self.trails: dict[int, collections.deque] = {}
+        self.side_votes: dict[int, collections.deque] = {}   # suivi -> votes récents (+conf ennemi, -conf allié)
         self._fresh = True
         self.tracker = self                      # interface de detect_katacr : det.tracker.reset()
         self.on_arena(np.zeros((ARENA_SIZE[1], ARENA_SIZE[0], 3), np.uint8))   # chauffe (TensorRT)
@@ -60,6 +61,7 @@ class Detector:
         """Nouveau combat : le suivi repart de zéro."""
         self._fresh = True
         self.trails.clear()
+        self.side_votes.clear()
 
     def _crop(self, frame: np.ndarray) -> tuple[np.ndarray, tuple[float, float, float, float]]:
         h, w = frame.shape[:2]
@@ -89,7 +91,13 @@ class Detector:
             if name in UI or name.startswith("padding") or (self.track and conf < 0.35):
                 continue
             box = (int(ox + x0 * sx), int(oy + y0 * sy), int(ox + x1 * sx), int(oy + y1 * sy))
-            units.append(Unit(int(tid), name, side == "1", float(conf), box))
+            enemy = side == "1"
+            if tid >= 0:
+                # le camp d'une unité ne change jamais : vote sur ses dernières images (évite le bleu/rouge qui clignote)
+                v = self.side_votes.setdefault(int(tid), collections.deque(maxlen=15))
+                v.append(conf if enemy else -conf)
+                enemy = sum(v) > 0
+            units.append(Unit(int(tid), name, enemy, float(conf), box))
         self._update_trails(units)
         return units
 
@@ -102,6 +110,9 @@ class Detector:
         for tid in list(self.trails):
             if tid not in alive:
                 del self.trails[tid]
+        for tid in list(self.side_votes):
+            if tid not in alive and len(self.side_votes) > 200:
+                del self.side_votes[tid]
 
 
 BLUE, RED = (255, 150, 30), (40, 40, 235)

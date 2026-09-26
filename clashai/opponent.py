@@ -100,6 +100,8 @@ class Opponent:
                 # règle du cycle : une carte jouée ne revient en main qu'après 4 autres cartes
                 if card in self.played[-4:]:
                     continue
+                if len(self.deck) >= 8 and card not in self.deck:
+                    continue                         # deck complet : c'est une fausse détection
                 if now - t_last > 1.5:
                     quiet = now - max((t for t, _ in self.recent.values()), default=self.start) > 5
                     self.recent[card] = (now, 1)
@@ -179,6 +181,16 @@ class Opponent:
     def can_afford(self) -> list[str]:
         costs = {c: cost for c, cost, _ in UNIT2CARD.values()}
         return [c for c in self.hand if costs.get(c, 99) <= self.elixir]
+
+    def plausible(self, u) -> bool:
+        """Une unité ennemie est-elle crédible ? Carte de son deck connu, ou détection très sûre (nouvelle carte).
+        Deck complet (8 cartes vues) : rien d'autre n'est possible."""
+        if not u.enemy or u.name not in UNIT2CARD or "tower" in u.name:
+            return True
+        card = UNIT2CARD[u.name][0]
+        if card in self.deck:
+            return True
+        return len(self.deck) < 8 and u.conf >= 0.75
 
     def banner(self) -> list[str]:
         """Trois lignes courtes pour le bandeau du haut."""

@@ -54,8 +54,10 @@ class Agent:
 
     def think(self, img, now, fps):
         t0 = time.perf_counter()
-        units = self.det(img)
+        raw = self.det(img)
         self.perf["det_ms"] = (time.perf_counter() - t0) * 1000
+        # l'adversaire apprend son deck sur toutes les détections ; le cerveau ne voit que les unités crédibles
+        units = [u for u in raw if self.opp.plausible(u)]
         self._watch_spells(units, img, now)
         self.match.update(img, units, now)
         self.brain.match = self.match
@@ -66,7 +68,7 @@ class Agent:
         self._learn_new_card(img, hand, ready)
         hand = H.read_hand(img, min_score=0.45)
         el = B.read_elixir(img)
-        new = self.opp.update(units, now, img.shape[0])
+        new = self.opp.update(raw, now, img.shape[0])
         for c in new:
             self.opp_log.append({"t": round(now, 2), "card": c, "elixir_after": round(self.opp.elixir, 1)})
         self.brain.opp_elixir = self.opp.elixir
@@ -131,14 +133,46 @@ class Agent:
                 streak[slot] = 0
         self._unknown_streak = streak
 
+    def _draw_opponent(self, v):
+        from clashai.opponent import UNIT2CARD
+        h, w = v.shape[:2]
+        v[0:92] = (v[0:92] * 0.15).astype(v.dtype)
+        o = self.opp
+        costs = {c: cost for c, cost, _ in UNIT2CARD.values()}
+        # main probable : 4 cases, comme nos cartes
+        hand = (o.hand + ["?"] * 4)[:4] if len(o.deck) >= 5 else ["?"] * 4
+        cw, x0 = (w - 120) // 4, 6
+        cv2.putText(v, "MAIN ADVERSE", (x0, 13), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (80, 200, 255), 1, cv2.LINE_AA)
+        for i, c in enumerate(hand):
+            x = x0 + i * cw
+            known = c != "?"
+            cv2.rectangle(v, (x, 18), (x + cw - 6, 60), (60, 60, 160) if known else (60, 60, 60), -1)
+            cv2.rectangle(v, (x, 18), (x + cw - 6, 60), (120, 120, 255) if known else (110, 110, 110), 1)
+            cv2.putText(v, _ascii(c)[:11], (x + 4, 36), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (255, 255, 255), 1, cv2.LINE_AA)
+            if known and c in costs:
+                cv2.circle(v, (x + cw - 18, 50), 8, (200, 60, 200), -1)
+                cv2.putText(v, str(costs[c]), (x + cw - 22, 54), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (255, 255, 255), 1, cv2.LINE_AA)
+        # prochaine carte à revenir
+        nx = w - 108
+        cv2.putText(v, "SUIVANTE", (nx, 13), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (200, 200, 200), 1, cv2.LINE_AA)
+        cv2.rectangle(v, (nx, 18), (w - 6, 60), (70, 70, 70), -1)
+        cv2.putText(v, _ascii(o.next_in or "?")[:12], (nx + 4, 44), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (230, 230, 230), 1, cv2.LINE_AA)
+        # barre d'élixir, rose comme la nôtre, graduée de 0 à 10
+        bx0, bx1, by = 6, w - 6, 70
+        cv2.rectangle(v, (bx0, by), (bx1, by + 14), (60, 30, 60), -1)
+        fill = int((bx1 - bx0) * max(0.0, min(10.0, o.elixir)) / 10)
+        cv2.rectangle(v, (bx0, by), (bx0 + fill, by + 14), (220, 80, 220), -1)
+        for k in range(1, 10):
+            x = bx0 + (bx1 - bx0) * k // 10
+            cv2.line(v, (x, by), (x, by + 14), (40, 20, 40), 1)
+        cv2.putText(v, f"elixir adverse ~{o.elixir:.1f}  ({len(o.deck)}/8 cartes vues)", (bx0 + 4, by + 11),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.38, (255, 255, 255), 1, cv2.LINE_AA)
+
     def annotate(self, img, units, d, info):
         v = img.copy()
-        # bandeau du haut : ce que l'IA sait de l'adversaire
+        # bandeau du haut : l'adversaire comme notre bas d'écran (barre d'élixir + sa main probable)
         h, w = v.shape[:2]
-        v[0:78] = (v[0:78] * 0.2).astype(v.dtype)
-        for i, line in enumerate(self.opp.banner()):
-            cv2.putText(v, _ascii(line), (6, 20 + 24 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.47,
-                        (80, 200, 255) if i == 0 else (255, 255, 255), 1, cv2.LINE_AA)
+        self._draw_opponent(v)
         draw(v, units, self.det.trails)
         if d:
             h, w = v.shape[:2]
@@ -148,8 +182,8 @@ class Agent:
             info = [d.reason] + info
         for i, line in enumerate(info):
             line = _ascii(line)
-            cv2.putText(v, line, (8, 100 + 22 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 0), 4, cv2.LINE_AA)
-            cv2.putText(v, line, (8, 100 + 22 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
+            cv2.putText(v, line, (8, 110 + 22 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 0), 4, cv2.LINE_AA)
+            cv2.putText(v, line, (8, 110 + 22 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
         return v
 
     def play_battle(self, dev, game_id: str, params: dict | None = None) -> dict:
