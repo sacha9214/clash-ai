@@ -85,7 +85,11 @@ def main():
         while pid_alive(pid):
             time.sleep(60)
     log("=== entraînement v2 : début ===")
-    run([PY_YOLO, "scripts/fankit_synth.py", "--n", a.n_fk])
+    have = len(list((DATA / "images/train_fk").glob("fk_*.jpg"))) if (DATA / "images/train_fk").exists() else 0
+    if have >= a.n_fk:
+        log(f"images Fan Kit déjà prêtes : {have}")         # générées pendant que le GPU faisait autre chose
+    else:
+        run([PY_YOLO, "scripts/fankit_synth.py", "--n", a.n_fk])
     log(f"images réelles corrigées ajoutées : {add_real_labels()}")
 
     code, out = run([PY_YOLO, "scripts/eval_yolo.py", MODELS / "clashai_yolo11s.engine"])
