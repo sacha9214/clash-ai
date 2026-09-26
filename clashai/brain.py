@@ -205,7 +205,8 @@ class Brain:
             units = [(u.name, u.enemy, *PHONE.to_tile(u.x, u.y)) for u in seen]
             (c, r), _ = self.placer.predict(d.card, units, forbid=_tower_tiles())
             d.x, d.y = PHONE.center(c, r)
-            d.reason += f" | case des pros ({c},{r})"
+            # la règle a choisi QUOI et QUAND ; l'endroit vient du modèle : on ne garde que la première partie
+            d.reason = d.reason.split(" -> ")[0].split(" (")[0] + f" -> {d.card}, case apprise des pros ({c},{r})"
         if DECK[d.card].kind != "spell":
             # le jeu pose au centre d'une case : on vise ce centre (et on reste hors des tours)
             d.x, d.y = PHONE.snap(*_clamp_own(*PHONE.snap(d.x, d.y)))

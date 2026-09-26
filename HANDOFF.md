@@ -29,6 +29,21 @@ Colle ce fichier à Claude Code pour reprendre.
   `scripts/extract_videos.py` localise l'arène (par les tours), analyse 5 images/s (x6 le temps réel) et écrit
   chaque carte jouée (camp, instant, case, plateau) dans `runs/videos/`. ~1 770 coups extraits.
 
+## 26/09 (en cours, autonome)
+- Détecteur de l'IA : NOTRE YOLO11s TensorRT (`clashai/detect_yolo.py`, `models/yolo/`), .venv-yolo.
+  Test (séquences jamais vues) : F1 0.939 vs 0.916 KataCR, 8.5 ms vs 28 ms. KataCR en secours (CLASHAI_DETECTOR=katacr).
+- Placement appris des pros (`clashai/placement.py`, `scripts/train_placement.py`) : 4.3 cases d'écart vs 5.1 pour
+  les règles (vidéos jamais vues). Règles : côté de l'ennemi le plus avancé, Canon à l'avance / contre tout le sol.
+- Nouvelles cartes / héros / évolutions : rendus du Fan Kit officiel (`scripts/fankit_*.py`, D:\clash-ai-datasetankit),
+  quelques boîtes réelles (label_tool.py, bug d'écrasement corrigé), pseudo-étiquetage après v2.
+- Chaîne GPU automatique (processus Windows, hors Claude) :
+  1. analyse des 30 h de vidéos -> ~11:00 -> réentraînement placement (`runs/videos/placement_train.txt`)
+  2. `finetune_detector.py` (points faibles) -> ~15:30 -> `runs/detector/FINETUNE_REPORT.md`
+  3. `train_v2.py` (nouvelles cartes) -> ~00:00 -> `runs/detector/V2_REPORT.md`
+  4. `pseudo_label.py` -> `runs/detector/pseudo_labels.json` (à vérifier à l'œil avant réentraînement)
+  5. analyse des +70 h de vidéos (objectif 100 h) -> placement réentraîné (`runs/videos/placement_train_100h.txt`)
+- Pas de téléphone le 26/09 : aucun match ; tout reste à valider en match ensuite.
+
 ## Nuit du 25 au 26/09 (autonome, hors de Claude)
 - `scripts/night_detector.py` (PID 39148) : YOLO11s, 64 199 images (60 000 synthétiques + 4 199 réelles), 8 h max,
   puis note sur le test (séquences jamais vues ; KataCR : F1 0.916), export TensorRT et rapport
