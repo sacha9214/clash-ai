@@ -39,8 +39,13 @@ def skip(name: str) -> bool:
     return name in SKIP or name.startswith("padding")
 
 
+CONF = 0.5
+
+
 def main():
-    weights = sys.argv[1]
+    global CONF
+    CONF = next((float(x.split("=")[1]) for x in sys.argv if x.startswith("--conf=")), 0.5)
+    weights = next(x for x in sys.argv[1:] if not x.startswith("--"))
     model = YOLO(weights)
     # test : séquences vidéo ENTIÈRES jamais vues à l'entraînement (D:/clash-ai-dataset/test_real.txt),
     # pour que des images voisines presque identiques ne faussent pas la note
@@ -53,7 +58,7 @@ def main():
         sx, sy = img.shape[1] / ARENA_SIZE[0], img.shape[0] / ARENA_SIZE[1]
         torch.cuda.synchronize()
         t0 = time.perf_counter()
-        r = model.predict(crop, imgsz=896, conf=0.5, verbose=False, device=0)[0]
+        r = model.predict(crop, imgsz=896, conf=CONF, verbose=False, device=0)[0]
         torch.cuda.synchronize()
         times.append((time.perf_counter() - t0) * 1000)
         preds = []

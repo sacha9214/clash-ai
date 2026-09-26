@@ -15,6 +15,7 @@ from clashai.cards import AIR_UNITS, BUILDINGS, DECK, NOT_UNITS, SWARM_UNITS, TA
 
 SPAWNERS = {"goblin-hut", "tombstone", "barbarian-hut", "furnace", "goblin-cage", "elixir-collector"}
 from clashai.detect import Unit
+from clashai import card_info
 from clashai.tiles import OWN_FIRST_ROW, PHONE
 
 # Géométrie de l'arène (mesurée sur l'écran du REDMAGIC, flux 578x1280)
@@ -69,7 +70,7 @@ def _hits_enemy_king(card: str, x: float, y: float) -> bool:
     tx, ty = PHONE.to_tile(x, y)
     x0, x1, y0, y1 = ENEMY_KING_TILES
     dx, dy = max(x0 - tx, 0, tx - x1), max(y0 - ty, 0, ty - y1)
-    return math.hypot(dx, dy) < SPELL_RADIUS_TILES.get(card, 3.0) + 0.3   # petite marge d'imprécision
+    return math.hypot(dx, dy) < max(SPELL_RADIUS_TILES.get(card, 0), card_info.spell_radius(card)) + 0.3   # marge d'imprécision
 
 
 # ---- Adaptation au deck adverse (cartes vues par opponent.py) ----
@@ -319,12 +320,13 @@ class Brain:
         if v <= 0 or t <= 0:
             return u.x, u.y
         k = min(1.0, MAX_UNIT_SPEED_TILES / v)
-        rng = ATTACK_RANGE_TILES.get(u.name, MELEE_RANGE_TILES)
+        st = card_info.info(u.name)                               # vraies statistiques (base des cartes)
+        rng = st["range"] or ATTACK_RANGE_TILES.get(u.name, MELEE_RANGE_TILES)
         melee = rng <= MELEE_RANGE_TILES + 0.1
         blockers = [(bx, by, TOWER_HALF_TILES) for bx, by in OWN_TOWER_CENTERS]
-        if u.name not in BUILDING_TARGETERS:
+        if not (st["buildings_only"] or u.name in BUILDING_TARGETERS):
             blockers += [(o.x, o.y, 0.5) for o in self._ours
-                         if not (melee and o.name in AIR_UNITS)]        # la mêlée ne touche pas les volants
+                         if st["hits_air"] or not (o.name in AIR_UNITS or card_info.info(o.name)["flying"])]
         x, y, step = u.x, u.y, 0.1
         for _ in range(int(t / step) + 1):
             if any(_tile_dist(x, y, bx, by) <= rng + size for bx, by, size in blockers):

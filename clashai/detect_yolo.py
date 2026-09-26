@@ -93,10 +93,11 @@ class Detector:
             box = (int(ox + x0 * sx), int(oy + y0 * sy), int(ox + x1 * sx), int(oy + y1 * sy))
             enemy = side == "1"
             if tid >= 0:
-                # le camp d'une unité ne change jamais : vote sur ses dernières images (évite le bleu/rouge qui clignote)
-                v = self.side_votes.setdefault(int(tid), collections.deque(maxlen=15))
-                v.append(conf if enemy else -conf)
-                enemy = sum(v) > 0
+                # le camp d une unité ne change jamais : vote sur TOUTES ses images depuis son apparition
+                v = self.side_votes.setdefault(int(tid), collections.deque(maxlen=None))   # tout son historique : figé
+                if len(v) < 3:
+                    v.append(conf if enemy else -conf)          # décidé sur ses 3 premières images…
+                enemy = sum(v) > 0                              # …puis figé pour toute sa vie
             units.append(Unit(int(tid), name, enemy, float(conf), box))
         self._update_trails(units)
         return units
