@@ -116,7 +116,8 @@ class Opponent:
             elif now - t0 > 2.0:
                 del self.pending[tid]
         # 2) nouveaux candidats : unités nées dans la moitié ennemie
-        prev = getattr(self, "_prev_pos", [])
+        if not hasattr(self, "_memory"):
+            self._memory: list[tuple[float, str, float, float]] = []   # unités ennemies vues ces 3 dernières s
         spawners = [(u.name, u.center) for u in units if u.name in SPAWNER_OF]
         for u in units:
             if u.name in SPAWNER_OF:
@@ -138,6 +139,8 @@ class Opponent:
                 continue
             if u.name in SPAWNED or u.name not in UNIT2CARD:
                 continue
+            if not u.enemy:                          # le camp est fiable et figé par unité : une unité bleue
+                continue                             # qui traverse la rivière n'est pas une carte adverse
             card = UNIT2CARD[u.name][0]
             # sortie d'un bâtiment (Cabane -> Gobelins à lance, Pierre tombale -> Squelettes…)
             if any(u.name in SPAWNER_OF[b] and abs(bx - u.center[0]) < 0.2 * frame_h / 2.2
@@ -148,13 +151,13 @@ class Opponent:
                 continue
             # le suivi perd parfois une unité et lui redonne un nouveau numéro : si une unité
             # de la même carte était là, tout près, à l'analyse précédente, ce n'est pas une nouvelle carte
-            if any(c == card and abs(x - u.center[0]) < 0.12 * frame_h / 2.2 and abs(y - u.center[1]) < 0.08 * frame_h
-                   for c, x, y in prev):
+            # mémoire de 3 s (pas seulement l'image précédente) : même carte vue à moins de ~3,5 cases
+            if any(c == card and abs(x - u.center[0]) < 0.19 * frame_h / 2.2 and abs(y - u.center[1]) < 0.06 * frame_h
+                   for _, c, x, y in self._memory):
                 continue
             if u.center[1] < 0.43 * frame_h:
                 self.pending[tid] = (card, now)
-        self._prev_pos = [(UNIT2CARD[u.name][0], u.center[0], u.center[1]) for u in units
-                          if u.name in UNIT2CARD and u.enemy]
+        self._memory = [m for m in self._memory if now - m[0] <= 3.0] +             [(now, UNIT2CARD[u.name][0], u.center[0], u.center[1]) for u in units if u.name in UNIT2CARD and u.enemy]
         return new_cards
 
     @property
