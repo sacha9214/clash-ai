@@ -27,12 +27,13 @@ SPACE = {
     "punish_opposite": [False, True],       # l'ennemi pose une carte lourde -> Mini P.E.K.K.A/Chevalier au pont, autre couloir
     "giant_when_counter_out": [False, True],  # Géant plus tôt quand ses contres connus ne sont plus dans sa main
     "fireball_patient": [False, True],      # Boule de feu sur cible seule : seulement si elle touche aussi une tour
+    "placement_model": [True, False],       # « où poser » appris des pros (vidéos) plutôt que par les règles
 }
 DEFAULT = {"giant_elixir": 9, "giant_spot": "king", "support_min_elixir": 4, "arrows_min": 3,
            "fireball_min": 2, "defend_line": 0.06, "counter_push": True, "cycle_at": 9.5,
            "punish_low_elixir": False, "fireball_spawners": False,
            "ignore_small": True, "punish_opposite": False, "giant_when_counter_out": False,
-           "fireball_patient": False}
+           "fireball_patient": False, "placement_model": True}
 
 
 def _key(p: dict) -> str:

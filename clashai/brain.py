@@ -80,6 +80,22 @@ SMALL_SPELLS = {"arrows", "zap", "the-log", "giant-snowball", "barbarian-barrel"
 PULL_BUILDINGS = {"cannon", "tesla", "inferno-tower", "bomb-tower", "goblin-cage", "tombstone"}
 
 
+_TOWER_TILES = None
+
+
+def _tower_tiles():
+    """Cases occupées par nos tours (interdites au modèle de placement)."""
+    global _TOWER_TILES
+    if _TOWER_TILES is None:
+        import numpy as np
+        _TOWER_TILES = np.zeros((32, 18), bool)
+        for r in range(32):
+            for c in range(18):
+                x, y = PHONE.center(c, r)
+                _TOWER_TILES[r, c] = any(abs(x - cx) < hw and abs(y - cy) < hh for cx, cy, hw, hh in OWN_TOWERS)
+    return _TOWER_TILES
+
+
 def _cost(unit_name: str) -> int:
     v = UNIT2CARD.get(unit_name)
     return v[1] if v else 3
@@ -143,6 +159,11 @@ class Brain:
         self._ours: list[Seen] = []
         self.match = None                        # towers.MatchState : PV de nos tours, tours ennemies, phase
         self.last_own_play: tuple[int, float] | None = None   # (couloir, instant) de notre dernière troupe
+        # « où poser » appris sur les coups des pros (clashai/placement.py) ; les règles gardent « quand » et « quoi »
+        self.placer = None
+        if self.p.get("placement_model"):
+            from clashai.placement import load
+            self.placer = load()
         self.own_recent: list[tuple[tuple[str, ...], float, float, float]] = []   # (unités, x, y, instant) posées par nous
 
     # ---- perception -> monde simplifié ----
@@ -179,6 +200,12 @@ class Brain:
         d = self._decide(seen, hand, ready, elixir, now)
         if d is None:
             return None
+        if (self.placer and DECK[d.card].kind != "spell" and self.placer.knows(d.card)
+                and not d.reason.startswith("défense : Tonneau")):
+            units = [(u.name, u.enemy, *PHONE.to_tile(u.x, u.y)) for u in seen]
+            (c, r), _ = self.placer.predict(d.card, units, forbid=_tower_tiles())
+            d.x, d.y = PHONE.center(c, r)
+            d.reason += f" | case des pros ({c},{r})"
         if DECK[d.card].kind != "spell":
             # le jeu pose au centre d'une case : on vise ce centre (et on reste hors des tours)
             d.x, d.y = PHONE.snap(*_clamp_own(*PHONE.snap(d.x, d.y)))
