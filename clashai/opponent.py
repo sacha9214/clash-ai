@@ -185,8 +185,10 @@ class Opponent:
     def plausible(self, u) -> bool:
         """Une unité ennemie est-elle crédible ? Carte de son deck connu, ou détection très sûre (nouvelle carte).
         Deck complet (8 cartes vues) : rien d'autre n'est possible."""
-        if not u.enemy or u.name not in UNIT2CARD or "tower" in u.name:
+        if not u.enemy or "tower" in u.name:
             return True
+        if u.name not in UNIT2CARD:                  # unité hors de la table (Cage, Soigneuse…) : seulement si sûre
+            return u.conf >= 0.75 and len(self.deck) < 8
         card = UNIT2CARD[u.name][0]
         if card in self.deck:
             return True
