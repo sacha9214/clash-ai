@@ -78,12 +78,19 @@ def combat(name: str) -> dict:
     e = db().get(card or "", {})
     u = (e.get("units") or [{}])[0]
     i = info(name)
-    dmg, hs = u.get("damage_lvl1") or 0, u.get("hit_speed_s") or 1.0
+    dmg, hs = u.get("damage_lvl1") or 0, u.get("hit_speed_s") or i["hit_speed"] or 1.0
+    hp = u.get("hp_lvl1") or 0
+    if not hp or not dmg:
+        # cartes sans stats de niveau 1 (récentes…) : valeurs niveau 11 du wiki ramenées au niveau 1 (÷2.56,
+        # rapport mesuré sur le Chevalier : 1766 / 690) pour rester à la même échelle que les autres
+        l11 = (e.get("current") or {}).get("level11") or e.get("level11") or {}
+        hp = hp or (_num(l11.get("Hitpoints")) or 0) / 2.56
+        dmg = dmg or (_num(l11.get("Damage")) or _num(l11.get("Area Damage")) or 0) / 2.56
     t = (u.get("targets") or "")
     return {
-        "hp": u.get("hp_lvl1") or 0, "dps": dmg / hs if hs else 0, "count": u.get("count") or 1,
+        "hp": hp, "dps": dmg / hs if hs else 0, "count": u.get("count") or 1,
         "dmg": dmg, "hs": hs,
-        "hits_air": "air" in t or i["hits_air"], "hits_ground": "sol" in t or "ground" in t,
+        "hits_air": "air" in t or i["hits_air"], "hits_ground": "sol" in t or "ground" in t or not t,
         "flying": i["flying"], "splash": bool(u.get("splash_radius_tiles") or i["splash"]),
         "range": i["range"] or 1.0, "buildings_only": i["buildings_only"], "cost": e.get("elixir") or 3,
     }
