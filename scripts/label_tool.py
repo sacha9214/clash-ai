@@ -150,10 +150,10 @@ class Handler(BaseHTTPRequestHandler):
             (REAL / "labels").mkdir(parents=True, exist_ok=True)
             lines = []
             for b in req["boxes"]:
-                name = b["name"].strip().lower().replace(" ", "-")
-                if not name:
+                card = b["name"].strip().lower().replace(" ", "-")   # ne pas écraser `name` (nom de l'image)
+                if not card:
                     continue
-                key = f"{name}_{int(b['side'])}"
+                key = f"{card}_{int(b['side'])}"
                 x0, y0, x1, y1 = b["box"]
                 lines.append(f"{class_id(key)} {(x0 + x1) / 2:.6f} {(y0 + y1) / 2:.6f} {x1 - x0:.6f} {y1 - y0:.6f}")
             (REAL / "labels" / f"{name}.txt").write_text("\n".join(lines))
