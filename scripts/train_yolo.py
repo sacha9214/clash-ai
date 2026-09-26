@@ -24,6 +24,8 @@ def main():
     ap.add_argument("--imgsz", type=int, default=896)
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--name", default=None)
+    ap.add_argument("--lr0", type=float, default=0.01, help="pas d'apprentissage initial (plus petit pour un réglage fin)")
+    ap.add_argument("--close-mosaic", type=int, default=10)
     a = ap.parse_args()
     if sys.platform == "win32":
         # empêche la mise en veille pendant l'entraînement (comme un lecteur vidéo) ; relâché à la fin du programme,
@@ -34,7 +36,8 @@ def main():
     YOLO(a.model).train(
         data=a.data, epochs=a.epochs, time=a.hours, batch=a.batch, imgsz=a.imgsz, workers=a.workers,
         device=0, project=str(ROOT / "runs/detector"), name=a.name or Path(a.model).stem + "_cr", exist_ok=True,
-        patience=15, cos_lr=True, close_mosaic=10, cache=False,
+        patience=15, cos_lr=True, close_mosaic=a.close_mosaic, cache=False, lr0=a.lr0,
+        warmup_epochs=0.5 if a.lr0 < 0.01 else 3.0,
         # le camp se lit à la couleur (bleu = nous, rouge = eux) : pas de changement de teinte
         hsv_h=0.0, hsv_s=0.3, hsv_v=0.3,
         fliplr=0.5, flipud=0.0, degrees=0.0, mosaic=0.5, mixup=0.0,

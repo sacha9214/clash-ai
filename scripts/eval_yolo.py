@@ -53,7 +53,7 @@ def main():
         sx, sy = img.shape[1] / ARENA_SIZE[0], img.shape[0] / ARENA_SIZE[1]
         torch.cuda.synchronize()
         t0 = time.perf_counter()
-        r = model.predict(crop, imgsz=896, conf=0.5, half=True, verbose=False, device=0)[0]
+        r = model.predict(crop, imgsz=896, conf=0.5, verbose=False, device=0)[0]
         torch.cuda.synchronize()
         times.append((time.perf_counter() - t0) * 1000)
         preds = []

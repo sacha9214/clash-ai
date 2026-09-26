@@ -58,7 +58,7 @@ input{width:100%;padding:6px;font-size:14px}.k{color:#9ab}#list div{padding:2px 
 </style></head><body>
 <canvas id="c" width="568" height="896"></canvas>
 <div id="side">
-<div id="stat"></div>
+<div id="stat"></div><div id="hint" style="background:#553;padding:6px;margin:6px 0;display:none"></div>
 <p>Carte pour les nouvelles boîtes / la boîte sélectionnée<br><span class="k">(une carte absente de la liste :
 tape son nom, ex. « goblin-machine » — elle devient une nouvelle classe)</span></p>
 <input id="cls" list="units" placeholder="ex. knight"><datalist id="units"></datalist>
@@ -74,6 +74,7 @@ const c=document.getElementById('c'),g=c.getContext('2d');let img=new Image(),cu
 const W=568,H=896;
 async function next(){const r=await (await fetch('/api/next')).json();document.getElementById('stat').textContent=
  r.name?`${r.left} image(s) à corriger — ${r.done} validée(s)`:`Terminé — ${r.done} validée(s)`;
+ const h=document.getElementById('hint');if(r.hint){h.style.display='block';h.innerHTML=`Nouvelle carte à chercher : <b>${r.hint}</b><br>Encadre-la (tape « ${r.hint} » dans la liste), sinon Échap si elle n'est pas à l'écran.`;document.getElementById('cls').value=r.hint}else h.style.display='none';
  if(!r.name){g.clearRect(0,0,W,H);return}cur=r.name;boxes=r.boxes;sel=-1;img.onload=draw;img.src='/img/'+r.name+'.jpg'}
 function draw(){g.drawImage(img,0,0,W,H);boxes.forEach((b,i)=>{const[x0,y0,x1,y1]=b.box;
  g.strokeStyle=b.side?'#f44':'#4af';g.lineWidth=i==sel?3:1.5;g.strokeRect(x0*W,y0*H,(x1-x0)*W,(y1-y0)*H);
@@ -125,7 +126,9 @@ class Handler(BaseHTTPRequestHandler):
             if not pending:
                 return self._json({"name": None, "left": 0, "done": done})
             p = pending[0]
-            self._json({"name": p.stem, "boxes": json.loads(p.read_text()), "left": len(pending), "done": done})
+            hint = p.with_suffix(".hint")
+            self._json({"name": p.stem, "boxes": json.loads(p.read_text()), "left": len(pending), "done": done,
+                        "hint": hint.read_text().strip() if hint.exists() else None})
         elif self.path.startswith("/img/"):
             f = REAL / "pending" / Path(self.path[5:]).name
             if not f.exists():
@@ -156,11 +159,13 @@ class Handler(BaseHTTPRequestHandler):
             (REAL / "labels" / f"{name}.txt").write_text("\n".join(lines))
             shutil.move(src_img, REAL / "images" / f"{name}.jpg")
             src_json.unlink(missing_ok=True)
+            src_json.with_suffix(".hint").unlink(missing_ok=True)
         elif self.path == "/api/skip":
             (REAL / "skipped").mkdir(parents=True, exist_ok=True)
             if src_img.exists():
                 shutil.move(src_img, REAL / "skipped" / f"{name}.jpg")
             src_json.unlink(missing_ok=True)
+            src_json.with_suffix(".hint").unlink(missing_ok=True)
         self._json({"ok": True})
 
 

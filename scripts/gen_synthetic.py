@@ -39,12 +39,12 @@ def class_names() -> list[str]:
 
 
 def _worker(args):
-    wid, start, count, out, names = args
+    wid, start, count, out, names, only, prefix = args
     os.chdir(KATACR)
     from katacr.build_dataset.generator import Generator
     from katacr.constants.label_list import idx2unit
     from katacr.yolov8.cfg import img_size, intersect_ratio_thre, map_update_mode, unit_nums
-    units = sorted({n.rsplit("_", 1)[0] for n in names})
+    units = sorted(only) if only else sorted({n.rsplit("_", 1)[0] for n in names})   # --only : images centrées sur ces unités
     cls_id = {n: i for i, n in enumerate(names)}
     gen = Generator(seed=1000 + wid, intersect_ratio_thre=intersect_ratio_thre,
                     map_update={"mode": map_update_mode, "size": 5}, avail_names=units, noise_unit_ratio=0)
@@ -58,7 +58,7 @@ def _worker(args):
             key = f"{idx2unit[int(c)]}_{int(bel)}"
             if key in cls_id:
                 lines.append(f"{cls_id[key]} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}")
-        stem = f"syn_{k:06d}"
+        stem = f"{prefix}_{k:06d}"
         cv2.imwrite(str(out / "images/train" / f"{stem}.jpg"), img[..., ::-1], [cv2.IMWRITE_JPEG_QUALITY, 92])
         (out / "labels/train" / f"{stem}.txt").write_text("\n".join(lines))
     return count
@@ -95,19 +95,23 @@ def main():
     ap.add_argument("--out", default="D:/clash-ai-dataset")
     ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 4) - 2))
     ap.add_argument("--skip-val", action="store_true")
+    ap.add_argument("--only", default="", help="unités à mettre en avant, séparées par des virgules (points faibles)")
+    ap.add_argument("--prefix", default="syn")
     a = ap.parse_args()
     sys.path.insert(0, str(ROOT))
     out = Path(a.out)
     for sub in ("images/train", "labels/train", "images/val", "labels/val"):
         (out / sub).mkdir(parents=True, exist_ok=True)
     names = class_names()
-    yaml.safe_dump({"path": str(out), "train": "images/train", "val": "images/val",
-                    "names": dict(enumerate(names))}, open(out / "data.yaml", "w"), sort_keys=False)
+    if not (out / "data.yaml").exists():
+        yaml.safe_dump({"path": str(out), "train": "images/train", "val": "images/val",
+                        "names": dict(enumerate(names))}, open(out / "data.yaml", "w"), sort_keys=False)
     print(f"{len(names)} classes ({len(names) // 2} unités x 2 camps)", flush=True)
     if not a.skip_val:
         print("validation réelle :", convert_val(out, names), "images", flush=True)
     per = -(-a.n // a.workers)
-    jobs = [(w, w * per, min(per, a.n - w * per), out, names) for w in range(a.workers) if w * per < a.n]
+    only = [u for u in a.only.split(",") if u]
+    jobs = [(w, w * per, min(per, a.n - w * per), out, names, only, a.prefix) for w in range(a.workers) if w * per < a.n]
     with mp.Pool(len(jobs)) as pool:
         done = sum(pool.map(_worker, jobs))
     print("images synthétiques :", done, flush=True)

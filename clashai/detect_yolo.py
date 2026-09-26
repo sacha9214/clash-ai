@@ -75,7 +75,7 @@ class Detector:
     def on_arena(self, crop: np.ndarray, offset=(0, 0, 1.0, 1.0)) -> list[Unit]:
         """Détecte sur une arène déjà recadrée en 568x896 ; offset replace les boîtes dans l'image source."""
         ox, oy, sx, sy = offset
-        kw = dict(imgsz=IMGSZ, conf=self.conf, iou=self.iou, half=True, verbose=False, device=self.device)
+        kw = dict(imgsz=IMGSZ, conf=self.conf, iou=self.iou, verbose=False, device=self.device)   # moteur TensorRT déjà en FP16
         if self.track:
             r = self.model.track(crop, persist=not self._fresh, tracker="bytetrack.yaml", **kw)[0]
             self._fresh = False
