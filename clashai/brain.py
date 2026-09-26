@@ -202,7 +202,7 @@ class Brain:
         if d is None:
             return None
         if (self.placer and DECK[d.card].kind != "spell" and self.placer.knows(d.card)
-                and not d.reason.startswith("défense : Tonneau")):
+                and not d.reason.startswith("défense : Tonneau") and "[stats" not in d.reason):
             units = [(u.name, u.enemy, *PHONE.to_tile(u.x, u.y)) for u in seen]
             # couloir choisi par les règles (côté de l'ennemi : ~80 % d'accord avec les pros), case exacte par le
             # modèle ; une carte posée au centre par la règle (Canon…) laisse le modèle libre
@@ -338,6 +338,64 @@ class Brain:
     def _impact_time(card: str, x: float, y: float) -> float:
         return SPELL_IMPACT_S.get(card, 2.0)
 
+    @staticmethod
+    def _duel(card: str, group: list[Seen], near_tower: bool) -> tuple[bool, float, float] | None:
+        """Combat estimé entre notre carte et le groupe ennemi : (gagne ?, marge en s, temps pour tout tuer).
+        Temps pour tuer = PV ennemis / nos dégâts par seconde ; temps pour mourir = nos PV / leurs dégâts par
+        seconde (seulement les unités qui visent les troupes et peuvent nous toucher). Zone : touche jusqu'à 3."""
+        me = card_info.combat(card)
+        foes = [card_info.combat(g.name) for g in group]
+        hittable = [f for f in foes if (f["flying"] and me["hits_air"]) or (not f["flying"] and me["hits_ground"])]
+        if not hittable:
+            return None                                     # ne peut rien toucher (ex. Chevalier contre un volant)
+        # coup par coup : une unité mono-cible tue UNE cible à la fois (des squelettes à 1 coup = 1 coup chacun) ;
+        # une unité à zone frappe jusqu'à 3 cibles à chaque coup. Nos unités se partagent les cibles.
+        hits = sum(math.ceil(f["hp"] / me["dmg"]) if me["dmg"] else 99 for f in hittable)
+        if me["splash"]:
+            hits = math.ceil(hits / min(len(hittable), 3))
+        t_kill = hits * me["hs"] / me["count"]
+        if near_tower:                                       # la tour princesse tire aussi (~60 dégâts/s, niveau 1)
+            t_kill = 1 / (1 / max(t_kill, 1e-6) + 60 / max(sum(f["hp"] for f in hittable), 1))
+        their_dps = sum(f["dps"] * (min(me["count"], 3) if f["splash"] else 1) for f in foes
+                        if not f["buildings_only"] and (not me["flying"] or f["hits_air"]))
+        t_die = me["hp"] * me["count"] / their_dps if their_dps else 1e9
+        return t_kill < t_die, t_die - t_kill, t_kill
+
+    def _stat_pick(self, t: Seen, threats: list[Seen], playable: dict, push_cost: int) -> Decision | None:
+        """Choisit la carte qui GAGNE le combat au moindre coût, puis la place hors de portée si c'est un tireur."""
+        group = [s for s in threats if _tile_dist(s.x, s.y, t.x, t.y) < 4]
+        near_tower = t.y > OWN_TOWER_Y - 0.1
+        options = []
+        for card in playable:
+            if card not in DECK or DECK[card].kind == "spell" or card == "giant":
+                continue
+            r = self._duel(card, group, near_tower)
+            if r:
+                win, margin, t_kill = r
+                # gagnants : le moins cher d'abord ; si personne ne gagne : celui qui tient le plus longtemps
+                options.append((not win, DECK[card].cost > push_cost + 1, DECK[card].cost if win else 0, -margin,
+                                DECK[card].cost, card, t_kill))
+        if not options:
+            return None
+        options.sort()
+        lose, pricey, _, neg_margin, cost, card, t_kill = options[0]
+        if lose and pricey:
+            return None                                     # rien ne gagne à bon prix : la tour encaisse
+        me = card_info.combat(card)
+        their_range = max(card_info.combat(g.name)["range"] for g in group)
+        if me["range"] >= 4 and their_range < me["range"] - 1:
+            # tireur : posé hors de leur portée mais dans la nôtre, en arrière de la menace (vers notre Roi)
+            gap = min(me["range"] - 0.8, their_range + 2.5)
+            x, y = t.x, t.y + gap * PHONE.th
+            where = f"à {gap:.1f} cases (sa portée {their_range:.1f}, la nôtre {me['range']:.1f})"
+        else:
+            x, y = t.x + t.vx * 0.5, t.y + 0.05
+            where = "au contact"
+        x, y = _clamp_own(x, y)
+        verdict = f"gagne en ~{t_kill:.0f} s" if not lose else "ralentit seulement"
+        return Decision(card, playable[card], x, y,
+                        f"défense : {t.name} x{len(group)} -> {card} [stats : {verdict}, {where}]")
+
     def _defend(self, threats: list[Seen], playable: dict) -> Decision | None:
         # la menace la plus proche de nos tours (le plus bas à l'écran)
         t = max(threats, key=lambda s: s.y)
@@ -371,6 +429,10 @@ class Brain:
             return Decision("cannon", playable["cannon"], x, y, f"défense : {t.name} -> canon ({why})")
         # échange d'élixir : parmi les cartes adaptées, ne pas payer plus que l'attaque (+1) si une moins chère suffit
         push_cost = sum(_cost(n) for n in {s.name for s in threats if math.hypot(s.x - t.x, s.y - t.y) < 0.2})
+        if self.p.get("stat_defense", True):
+            d = self._stat_pick(t, threats, playable, push_cost)
+            if d:
+                return d
         fits = [c for c in order if c in playable and c in DECK]
         cheap = [c for c in fits if DECK[c].cost <= push_cost + 1]
         for card in cheap or sorted(fits, key=lambda c: DECK[c].cost):   # sinon, au moins la moins chère

@@ -68,3 +68,22 @@ def spell_radius(card: str, default: float = 3.0) -> float:
     e = db().get(card, {})
     cur = (e.get("current") or {}).get("attributes") or e.get("attributes") or {}
     return _num(cur.get("Radius")) or (e.get("spell") or {}).get("radius_tiles") or default
+
+
+@lru_cache(maxsize=512)
+def combat(name: str) -> dict:
+    """Pour un combat estimé : PV et dégâts/s PAR UNITÉ (niveau 1, fichiers du jeu : tout est à la même échelle),
+    nombre d'unités de la carte, ce qu'elle peut toucher, dégâts de zone."""
+    card = card_for_unit(name)
+    e = db().get(card or "", {})
+    u = (e.get("units") or [{}])[0]
+    i = info(name)
+    dmg, hs = u.get("damage_lvl1") or 0, u.get("hit_speed_s") or 1.0
+    t = (u.get("targets") or "")
+    return {
+        "hp": u.get("hp_lvl1") or 0, "dps": dmg / hs if hs else 0, "count": u.get("count") or 1,
+        "dmg": dmg, "hs": hs,
+        "hits_air": "air" in t or i["hits_air"], "hits_ground": "sol" in t or "ground" in t,
+        "flying": i["flying"], "splash": bool(u.get("splash_radius_tiles") or i["splash"]),
+        "range": i["range"] or 1.0, "buildings_only": i["buildings_only"], "cost": e.get("elixir") or 3,
+    }
