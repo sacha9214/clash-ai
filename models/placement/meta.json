@@ -61,6 +61,7 @@
   "x-bow"
  ],
  "moves": 14613,
- "test_median_gap": 5.0,
- "test_same_lane": 0.6210361067503924
+ "width": 96,
+ "test_median_gap": 4.47213595499958,
+ "test_same_lane": 0.6213500784929357
 }

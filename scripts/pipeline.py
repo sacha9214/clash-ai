@@ -80,6 +80,7 @@ def main():
     ap.add_argument("--hours", type=float, default=100)
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--skip-download", action="store_true")
+    ap.add_argument("--skip-placement", action="store_true", help="modèle de placement déjà entraîné à part")
     a = ap.parse_args()
     if sys.platform == "win32":
         ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000001)
@@ -113,10 +114,11 @@ def main():
     log(f"analyse terminée : {done} vidéos en {(time.time() - t0) / 60:.0f} min")
 
     # 3. placement : comparaison + réentraînement (CPU)
-    step("comparaison pros / IA", [PY_YOLO, "scripts/compare_placements.py"], ROOT / "runs/videos/placement_report.txt")
-    step("modèle de placement", [PY_YOLO, "scripts/train_placement.py"], ROOT / "runs/videos/placement_train.txt",
-         CUDA_VISIBLE_DEVICES="")
-    github("Placement model retrained on all analyzed videos")
+    if not a.skip_placement:
+      step("comparaison pros / IA", [PY_YOLO, "scripts/compare_placements.py"], ROOT / "runs/videos/placement_report.txt")
+      step("modèle de placement", [PY_YOLO, "scripts/train_placement.py"], ROOT / "runs/videos/placement_train.txt",
+           CUDA_VISIBLE_DEVICES="")
+      github("Placement model retrained on all analyzed videos")
 
     # 4-6. détecteur
     step("réglage fin du détecteur", [PY_YOLO, "scripts/finetune_detector.py", "--hours", "4"], ROOT / "runs/detector/finetune.out.txt")
