@@ -426,6 +426,11 @@ class Brain:
                                 DECK[card].cost, card, t_kill))
         if not options:
             return None
+        # garder Canon / Mini P.E.K.K.A pour son Géant/Cochon s'il l'a en main et qu'une autre carte gagne ici
+        if t.name not in WIN_CONDITIONS and set(self.opp_hand) & WIN_CONDITIONS:
+            spare = [o for o in options if o[5] not in ("cannon", "mini-pekka") and not o[0]]
+            if spare:
+                options = spare
         options.sort()
         lose, pricey, _, neg_margin, cost, card, t_kill = options[0]
         if lose and pricey:
