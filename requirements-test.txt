@@ -1,0 +1,8 @@
+# Tests hors téléphone (CI et local) : torch/torchvision CPU s'installent AVANT, depuis l'index PyTorch CPU
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+#   pip install -r requirements-test.txt && python -m pytest -q tests
+ultralytics
+numpy
+opencv-python-headless
+av
+pytest
