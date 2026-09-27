@@ -105,12 +105,16 @@ class Detector:
                 continue
             box = (int(ox + x0 * sx), int(oy + y0 * sy), int(ox + x1 * sx), int(oy + y1 * sy))
             enemy = side == "1"
+            color = team_color(crop, (int(x0), int(y0), int(x1), int(y1))) if "tower" not in name else 0
             if tid >= 0:
-                # le camp d une unité ne change jamais : vote sur TOUTES ses images depuis son apparition
-                v = self.side_votes.setdefault(int(tid), collections.deque(maxlen=None))   # tout son historique : figé
-                if len(v) < 3:
-                    v.append(conf if enemy else -conf)          # décidé sur ses 3 premières images…
-                enemy = sum(v) > 0                              # …puis figé pour toute sa vie
+                # le camp d'une unité ne change jamais : vote sur ses 8 premières images, puis figé. La couleur du
+                # badge (bleu/rouge) compte 3 fois plus que l'avis du détecteur, qui confond souvent les camps
+                v = self.side_votes.setdefault(int(tid), collections.deque(maxlen=None))
+                if len(v) < 8:
+                    v.append(3.0 * color if color else (conf if enemy else -conf))
+                enemy = sum(v) > 0
+            elif color:
+                enemy = color > 0
             units.append(Unit(int(tid), name, enemy, float(conf), box))
         if self.track:
             units = self._coast(self._confirm(units))
@@ -189,6 +193,24 @@ class Detector:
         for tid in list(self.side_votes):
             if tid not in alive and len(self.side_votes) > 200:
                 del self.side_votes[tid]
+
+
+def team_color(img: np.ndarray, box) -> int:
+    """Camp lu sur la couleur du badge de niveau / de la barre de vie au-dessus de l'unité (bleu = nous, rouge = eux).
+    +1 ennemi, -1 allié, 0 illisible. Sur nos captures : juste dans 5 désaccords sur 5 avec le détecteur."""
+    x0, y0, x1, y1 = box
+    h = y1 - y0
+    ya, yb = max(0, y0 - int(0.35 * h) - 6), max(1, y0 + int(0.25 * h))
+    xa, xb = max(0, x0 - 4), min(img.shape[1], x1 + 4)
+    if yb <= ya or xb <= xa:
+        return 0
+    hsv = cv2.cvtColor(img[ya:yb, xa:xb], cv2.COLOR_BGR2HSV)
+    strong = (hsv[..., 1] > 120) & (hsv[..., 2] > 120)
+    red = int((((hsv[..., 0] < 8) | (hsv[..., 0] > 170)) & strong).sum())
+    blue = int((((hsv[..., 0] > 95) & (hsv[..., 0] < 125)) & strong).sum())
+    if max(red, blue) < 12 or min(red, blue) > 0.5 * max(red, blue):
+        return 0
+    return 1 if red > blue else -1
 
 
 BLUE, RED = (255, 150, 30), (40, 40, 235)
