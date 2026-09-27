@@ -308,8 +308,12 @@ class Brain:
                                                  for names, x, y, _ in self.own_recent):
                 # NOTRE unité fraîchement posée prise pour une ennemie (ex. notre Géant « ennemi » sur sa case de pose)
                 s = Seen(s.name, False, s.x, s.y, s.vx, s.vy)
-            elif s.enemy and any(v["name"] == base and now - v["t"] < 10 and _tile_dist(s.x, s.y, v["x"], v["y"]) < 4
-                                 for v in self.virtual):
+            elif s.enemy and (any(v["name"] == base and now < v["until"] and _tile_dist(s.x, s.y, v["x"], v["y"]) < 4
+                                  for v in self.virtual)
+                              or (base in own_units and s.y > RIVER_Y and s.vy < 0
+                                  and now - self.own_played.get(base, -1e9) < OWN_UNIT_LIFE_S)):
+                # une « ennemie » dans NOTRE moitié qui s'éloigne de nos tours, d'une carte qu'on vient de jouer :
+                # c'est la nôtre qui part attaquer (27/09 : Canon + Gargouilles sur notre Géant, 13 s après la pose)
                 # là où NOTRE troupe de même nom doit être (suivie de mémoire depuis sa pose, à sa vitesse) :
                 # c'est la nôtre (27/09 : nos Gargouilles vues « ennemies » 4 s après la pose -> Chevalier gâché)
                 s = Seen(s.name, False, s.x, s.y, s.vx, s.vy)
@@ -448,6 +452,8 @@ class Brain:
             # faux -> on défend
             if all(s["hp"] and s["dps"] for s in st) and dps * hp / 60 < 170:
                 threats = []
+        if threats and not any(self._tower_low(_lane(t.x)) for t in threats) and len(threats) <= 4                 and all(card_info.combat(t.name)["hp"] and card_info.combat(t.name)["hp"] <= 110 for t in threats):
+            threats = []        # 2-4 Squelettes / esprits : la tour les tue en 1 coup chacun (27/09 : 5 cartes gâchées)
         if threats:
             # une nuée au sol (3+ unités) et notre Valkyrie en main, presque payable : on l'attend (~1 s) plutôt
             # que de jeter un Chevalier qui « ralentit seulement » (27/09 : 5 Barbares, Chevalier à 2,8 élixirs)

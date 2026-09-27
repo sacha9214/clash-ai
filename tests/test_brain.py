@@ -458,3 +458,18 @@ def test_our_musketeer_hitting_his_tower_is_not_defended():
     b.played(Decision("musketeer", 0, *at(3, 24), "test"), 80.0)
     d = b.decide([enemy("musketeer", 3, 13, vy_tiles=0.2)], ["knight", "cannon", "minions", "fireball"], ALL, 8.0, 100.0)
     assert d is None or not d.reason.startswith("défense : musketeer")
+
+
+def test_tower_handles_a_few_skeletons():
+    b = brain()
+    d = b.decide([enemy("skeleton", 3, 24), enemy("skeleton", 4, 24)], ["valkyrie", "minions", "knight", "cannon"],
+                 ALL, 6.0, 100.0)
+    assert d is None or not d.reason.startswith("défense")
+
+
+def test_our_giant_walking_up_our_half_read_as_enemy_is_ours():
+    b = brain()
+    b.played(Decision("giant", 0, *at(3, 19), "test"), 87.0)
+    b.virtual.clear()
+    d = b.decide([enemy("giant", 3, 18, vy_tiles=-0.6)], ["cannon", "minions", "knight", "fireball"], ALL, 8.0, 100.0)
+    assert d is None or not d.reason.startswith("défense : giant")
