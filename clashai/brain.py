@@ -69,7 +69,9 @@ LATE_S, REGULATION_S = 150.0, 180.0
 PUSH_MEMORY_S = 8.0
 COUNTER_WINDOW_S = 12.0                     # contre-attaque : nos défenseurs posés il y a moins de 12 s
 STURDY_HP = 450                             # PV (niveau 1) d'un défenseur qui vaut la peine d'être soutenu                         # défenses contre la même attaque adverse : créditée une fois
-TANK_DEADLINE_S = 12.0                      # un tank qui vise les bâtiments, du pont à notre tour : ~9 s de marche + 1er coup
+TANK_DEADLINE_S = 12.0
+ONE_SHOT_HP = 55                            # PV (niveau 1) qu'un tir de tour princesse suffit à tuer (Squelette, Chauve-souris)
+SPIRITS = {"fire-spirit", "ice-spirit", "electro-spirit", "heal-spirit"}                      # un tank qui vise les bâtiments, du pont à notre tour : ~9 s de marche + 1er coup
 # Valeur d'un sort (élixir détruit) : une unité sur notre moitié frappe déjà nos tours/troupes -> compte plus ;
 # une tour ennemie dans le cercle encaisse aussi (dégâts réduits aux tours)
 OUR_SIDE_BONUS = 1.3
@@ -207,6 +209,7 @@ class Brain:
             from clashai.placement import load
             self.placer = load()
         self.own_recent: list[tuple[tuple[str, ...], float, float, float]] = []   # (unités, x, y, instant) posées par nous
+        self.own_lane: dict[str, int] = {}      # unité -> couloir de sa dernière pose
         self.own_played: dict[str, float] = {}   # unité -> dernier instant où l'on a posé sa carte
         self.trades: list[tuple[float, float]] = []   # (instant, élixir gagné) de chaque échange vraiment joué
         self._credited: list[tuple[float, int]] = []    # (instant, couloir) des attaques adverses déjà créditées
@@ -319,7 +322,9 @@ class Brain:
                 s = Seen(s.name, False, s.x, s.y, s.vx, s.vy)
             elif (s.enemy and base in own_units and len(self.opp_deck) >= 4
                   and unit_card.get(base) not in self.opp_deck
-                  and now - self.own_played.get(base, -1e9) < OWN_UNIT_LIFE_S):   # immobile en frappant une tour : sans condition de vitesse
+                  and now - self.own_played.get(base, -1e9) < OWN_UNIT_LIFE_S
+                  and self.own_lane.get(base) == _lane(s.x)):
+                # (dans le couloir où on l'a posée : son 1er Chevalier dans l'autre couloir reste un ennemi)   # immobile en frappant une tour : sans condition de vitesse
                 # « ennemie » d'une carte qu'il n'a pas, qu'on vient de jouer, et qui monte vers ses tours :
                 # c'est la nôtre (27/09 : nos Gargouilles prises pour des ennemies -> Mousquetaire gâchée)
                 s = Seen(s.name, False, s.x, s.y, s.vx, s.vy)
@@ -377,6 +382,7 @@ class Brain:
             self.trades.append((now, round(trade, 2)))
         for u in card.units:
             self.own_played[u] = now
+            self.own_lane[u] = _lane(d.x)
         if card.kind != "spell":
             self.own_recent.append((card.units, d.x, d.y, now))
             if abs(d.x - 0.5) > 0.06:                                  # pas une carte posée au centre
@@ -403,8 +409,10 @@ class Brain:
         enemies = [s for s in seen if s.enemy]
         # Tonneau à gobelins en vol : Valkyrie juste derrière la tour visée, elle balaie les 3 gobelins à l'atterrissage
         barrel = next((e for e in enemies if e.name == "goblin-barrel"), None)
-        if barrel and len(self.opp_deck) >= 6 and "goblin-barrel" not in self.opp_deck:
-            barrel = None       # deck presque connu, sans Tonneau : fausse détection (27/09 : 2 Valkyries gâchées)
+        if barrel and len(self.opp_deck) >= 8 and "goblin-barrel" not in self.opp_deck:
+            # deck complet, sans Tonneau : fausse détection (27/09 : 2 Valkyries gâchées). Pas dès 6 cartes : un sort
+            # n'entre dans son deck qu'à la 2e fois, son 1er vrai Tonneau aurait toujours été ignoré
+            barrel = None
         if barrel and "valkyrie" in playable:
             lane_x = LANES_X[_lane(barrel.x)]
             x, y = _clamp_own(lane_x, OWN_TOWER_Y + 0.06)
@@ -452,8 +460,11 @@ class Brain:
             # faux -> on défend
             if all(s["hp"] and s["dps"] for s in st) and dps * hp / 60 < 170:
                 threats = []
-        if threats and not any(self._tower_low(_lane(t.x)) for t in threats) and len(threats) <= 4                 and all(card_info.combat(t.name)["hp"] and card_info.combat(t.name)["hp"] <= 110 for t in threats):
-            threats = []        # 2-4 Squelettes / esprits : la tour les tue en 1 coup chacun (27/09 : 5 cartes gâchées)
+        if threats and not any(self._tower_low(_lane(t.x)) for t in threats) and len(threats) <= 4 and all(
+                t.name in SPIRITS or 0 < card_info.combat(t.name)["hp"] <= ONE_SHOT_HP for t in threats):
+            # 2-4 Squelettes / esprits : la tour les tue en 1 coup (les esprits meurent en frappant) (27/09 : 5 cartes
+            # gâchées). Pas les Gargouilles ni les Gobelins (79-90 PV : plusieurs coups, 3 Gargouilles = 138 dégâts/s)
+            threats = []
         if threats:
             # une nuée au sol (3+ unités) et notre Valkyrie en main, presque payable : on l'attend (~1 s) plutôt
             # que de jeter un Chevalier qui « ralentit seulement » (27/09 : 5 Barbares, Chevalier à 2,8 élixirs)

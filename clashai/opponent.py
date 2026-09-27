@@ -163,11 +163,12 @@ class Opponent:
         """Nous venons de lancer un sort (card : son nom) : ses images ne sont pas des cartes à lui."""
         self.our_spells = [s for s in self.our_spells if now - s[0] < OUR_SPELL_S + 1] + [(now, x, y, card)]
 
-    def note_our_troop(self, now: float, card: str) -> None:
-        """Nous venons de poser cette carte : une « ennemie » de la même carte dans les 12 s qui suivent,
-        alors qu'il ne l'a jamais jouée, est notre troupe mal lue (27/09 : nos Gargouilles comptées chez lui)."""
-        self.our_troops = {c: t for c, t in getattr(self, "our_troops", {}).items() if now - t < OUR_TROOP_S}
-        self.our_troops[card] = now
+    def note_our_troop(self, now: float, card: str, x: float | None = None) -> None:
+        """Nous venons de poser cette carte (x : abscisse en px) : une « ennemie » de la même carte dans le même
+        couloir peu après, alors qu'il ne l'a jamais jouée, est notre troupe mal lue (27/09 : nos Gargouilles
+        comptées chez lui). Dans l'autre couloir, c'est vraiment la sienne (cartes en miroir : Chevalier, Géant…)."""
+        self.our_troops = {c: v for c, v in getattr(self, "our_troops", {}).items() if now - v[0] < OUR_TROOP_S}
+        self.our_troops[card] = (now, x)
 
     def update(self, units, now: float | None = None, frame_h: int = 1280) -> list[str]:
         """Met à jour avec les unités détectées. Renvoie les cartes que l'ennemi vient de poser.
@@ -248,8 +249,11 @@ class Opponent:
         if name not in UNIT2CARD or name in SPAWNED or name in c.near:
             return None                              # pas une carte, ou sortie d'un générateur tout proche
         card = UNIT2CARD[name][0]
-        if card not in self.played and now - getattr(self, "our_troops", {}).get(card, -1e9) < OUR_TROOP_S:
-            return None                              # notre carte de la même sorte, posée à l'instant
+        t_ours, x_ours = getattr(self, "our_troops", {}).get(card, (-1e9, None))
+        fw = frame_h / 2.2
+        if card not in self.played and now - t_ours < OUR_TROOP_S and (
+                x_ours is None or (x_ours < fw / 2) == (c.x < fw / 2)):
+            return None                              # notre carte de la même sorte, posée à l'instant, même couloir
         if self._spawned(name, now):
             return None                              # un générateur de son deck est là : ce n'est pas une pose
         # le suivi perd parfois une unité et lui redonne un nouveau numéro : même carte ennemie vue tout près
@@ -318,13 +322,13 @@ class Opponent:
 
     def _record(self, card: str, now: float, conf: float, heavy_resync: bool) -> str:
         quiet = now - max((t for t, _ in self.recent.values()), default=self.start) > 5
-        if card not in self.played and conf >= STRONG:
-            self.strong.add(card)
         if card in GANG and self.played and self.played[-1] in GANG - {card}                 and now - self.recent.get(self.played[-1], (-1e9, 0))[0] < 1.5:
             # Gobelins puis Gobelins à lance (ou l'inverse) presque en même temps : c'est UN Gang de gobelins
             prev = self.played.pop()
             self.elixir += CARD_COST[prev]
             card = "goblin-gang"
+        if card not in self.played and conf >= STRONG:
+            self.strong.add(card)                    # après le renommage : la marque va au Gang, pas aux Gobelins
         self.recent[card] = (now, 1)
         cost = CARD_COST[card]
         if heavy_resync and cost >= 6 and quiet:

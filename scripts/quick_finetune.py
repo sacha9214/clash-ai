@@ -29,7 +29,7 @@ QUICK = DATA / "quick"
 
 
 def is_test_game(stem: str) -> bool:
-    game = "_".join(stem.split("_")[1:3])
+    game = stem.split("_")[1]      # own_<match>_<image> : le MATCH entier va en test (sinon ses images fuient en entraînement)
     return int(hashlib.md5(game.encode()).hexdigest(), 16) % 5 == 0
 
 
@@ -38,7 +38,9 @@ def own_recall(model_path: Path, imgsz: int, stems: list[str]) -> float:
     from ultralytics import YOLO
     names = yaml.safe_load(open(DATA / "data_v2.yaml"))["names"]
     m = YOLO(str(model_path), task="detect")
-    ours = {"archer", "knight", "valkyrie", "mini-pekka", "giant", "cannon"}
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from clashai.cards import BENCH, DECK
+    ours = {u for c in [*DECK.values(), *BENCH.values()] for u in c.units}   # deck actuel + anciennes cartes
     found = total = 0
     for s in stems:
         img = DATA / "images/train_fk" / f"{s}.jpg"

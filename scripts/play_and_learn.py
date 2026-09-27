@@ -2,8 +2,9 @@
 
 - après chaque match : ré-étiquetage à double vérification (scripts/double_check.py) lancé EN PARALLÈLE du
   match suivant (léger : ~1 image/1,5 s de jeu à relire) ;
-- tous les --every matchs : réglage fin du scanner sur les images validées (~20 min, entre deux matchs pour ne
-  pas ralentir la détection en jeu), adopté SEULEMENT s'il fait mieux sur le jeu de test « notre écran »
+- tous les --every matchs : réglage fin du scanner sur les images validées (~20 min), EN PARALLÈLE des matchs
+  (le téléphone ne s'arrête jamais, la détection en jeu ralentit un peu) ou, avec --train-between, entre deux
+  matchs (détection à pleine vitesse, le téléphone attend) ; adopté SEULEMENT s'il fait mieux sur le jeu de test « notre écran »
   (matchs jamais appris) sans perdre sur le test habituel ;
 - le score du scanner est noté à chaque fois dans runs/detector/scanner_progress.jsonl.
 
@@ -85,8 +86,8 @@ def finetune(minutes: float) -> None:
         (FT / sub).mkdir(parents=True)
     random.seed(len(mine))
     # nos images validées x3 + un échantillon des images habituelles (pour ne rien oublier du reste)
-    others = random.sample(sorted((DATA / "images/train").glob("*.jpg")), 3000) + \
-        random.sample(sorted((DATA / "images/train_fk").glob("fk_*.jpg")), 1500)
+    pool, fk = sorted((DATA / "images/train").glob("*.jpg")), sorted((DATA / "images/train_fk").glob("fk_*.jpg"))
+    others = random.sample(pool, min(3000, len(pool))) + random.sample(fk, min(1500, len(fk)))
     for rep in range(3):
         for img in mine:
             shutil.copy(img, FT / "images/train" / f"r{rep}_{img.name}")
@@ -128,8 +129,12 @@ def finetune(minutes: float) -> None:
     if ok:
         for ext in (".pt", ".engine"):
             shutil.copy(MODELS / f"clashai_yolo11s{ext}", MODELS / f"clashai_yolo11s_prev{ext}")
-        shutil.copy(best, MODELS / "clashai_yolo11s.pt")
-        shutil.copy(new, MODELS / "clashai_yolo11s.engine")
+        # copie à côté puis remplacement : jamais un .pt neuf avec l'ancien .engine si une copie échoue en route
+        for src, ext in ((new, ".engine"), (best, ".pt")):
+            tmp = MODELS / f"clashai_yolo11s.tmp{ext}"
+            shutil.copy(src, tmp)
+        for ext in (".engine", ".pt"):
+            os.replace(MODELS / f"clashai_yolo11s.tmp{ext}", MODELS / f"clashai_yolo11s{ext}")
 
 
 def main():
@@ -138,13 +143,16 @@ def main():
     ap.add_argument("--every", type=int, default=4)
     ap.add_argument("--minutes", type=float, default=20)
     ap.add_argument("--no-show", action="store_true")
+    ap.add_argument("--train-between", action="store_true",
+                    help="réglage fin entre deux matchs (détection à pleine vitesse) plutôt qu'en parallèle")
     a = ap.parse_args()
     import threading
     labeler, trainer = None, None
     g = 0
     while a.games == 0 or g < a.games:
         g += 1
-        if labeler is None or labeler.poll() is not None:
+        busy = trainer is not None and trainer.is_alive()   # sa propre relecture tourne : pas deux à la fois
+        if not busy and (labeler is None or labeler.poll() is not None):
             # relit en parallèle les matchs pas encore traités pendant qu'on joue le suivant
             labeler = subprocess.Popen([PY, "scripts/double_check.py"], cwd=ROOT, env=ENV,
                                        creationflags=getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0))
@@ -159,11 +167,15 @@ def main():
             # réglage fin EN PARALLÈLE des matchs (le téléphone ne reste jamais sans jouer) ; le nouveau scanner,
             # s'il est adopté, est chargé au match suivant
             def job():
+                if labeler is not None:
+                    labeler.wait()          # deux relectures ensemble réécriraient dc_done.json l'une sur l'autre
                 subprocess.run([PY, "scripts/double_check.py"], cwd=ROOT, env=ENV)
                 subprocess.run([PY, "scripts/own_labels.py"], cwd=ROOT, env=ENV)   # test « nos troupes » à jour
                 finetune(a.minutes)
             trainer = threading.Thread(target=job, daemon=False)
             trainer.start()
+            if a.train_between:
+                trainer.join()              # le match suivant attend : détection à pleine vitesse
     if labeler:
         labeler.wait()
     if trainer:

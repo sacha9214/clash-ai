@@ -278,3 +278,14 @@ def test_goblin_gang_counted_once():
     m._record("goblins", 100.0, 0.9, heavy_resync=True)
     m._record("spear-goblins", 100.5, 0.9, heavy_resync=True)
     assert m.played == ["goblin-gang"] and abs(m.elixir - 7.0) < 1e-6
+
+
+def test_mirror_card_in_the_other_lane_is_his():
+    from clashai.opponent import Opponent
+    o = Opponent()
+    o.note_our_troop(100.0, "knight", x=100.0)                            # notre Chevalier, couloir gauche
+    t = o.our_troops["knight"]
+    assert t[1] == 100.0
+    # la règle de _judge_unit : même couloir -> ignoré ; autre couloir -> compté
+    fw = 1280 / 2.2
+    assert (t[1] < fw / 2) == (100.0 < fw / 2) and (t[1] < fw / 2) != (450.0 < fw / 2)

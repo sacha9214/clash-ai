@@ -270,8 +270,8 @@ class Agent:
                 ok = play_card(dev, d.slot, (int(d.x * w), int(d.y * h)),
                                on_frame=lambda im: self._observe(im, info))
                 play_ms = round((time.perf_counter() - t_play) * 1000)
-                if ok:
-                    self.opp.note_our_troop(time.time(), d.card)
+                if ok and d.card not in ("arrows", "fireball"):     # nos sorts : note_our_spell ci-dessous
+                    self.opp.note_our_troop(time.time(), d.card, d.x * w)
                 if ok and d.card in ("arrows", "fireball"):
                     self.opp.note_our_spell(time.time(), d.x * w, d.y * h, card=d.card)
                     # vol mesuré depuis la DÉCISION : c'est ce délai que brain.SPELL_IMPACT_S doit prévoir

@@ -73,7 +73,23 @@ def allowed(game: str):
         return None
     deck = set(json.loads(f.read_text(encoding="utf-8")).get("deck", []))
     enemy = {u for u, (c, *_) in UNIT2CARD.items() if c in deck} | {u for c in deck for u in SPAWNER_OF.get(c, ())}
-    return OWN_NAMES, enemy
+    return _our_names(game) or OWN_NAMES, enemy
+
+
+def _our_names(game: str) -> set[str]:
+    """Nos unités de CE match, d'après les cartes vues dans notre main (les anciens matchs avaient les Archères)."""
+    from clashai.cards import BENCH, DECK
+    cards = {**BENCH, **DECK}
+    f = ROOT / "runs/games" / game / "decisions.jsonl"
+    held = set()
+    if f.exists():
+        for line in f.read_text(encoding="utf-8").splitlines():
+            try:
+                held |= {c for c in json.loads(line).get("hand", []) if c in cards}
+            except ValueError:
+                pass
+    units = {u for c in held for u in cards[c].units}
+    return units | {u + "-evolution" for u in units}
 
 
 def process(game: str, det_a, det_b, names_v2: dict) -> tuple[int, int]:
