@@ -257,7 +257,7 @@ class Agent:
                                on_frame=lambda im: self._observe(im, info))
                 play_ms = round((time.perf_counter() - t_play) * 1000)
                 if ok and d.card in ("arrows", "fireball"):
-                    self.opp.note_our_spell(time.time(), d.x * w, d.y * h)
+                    self.opp.note_our_spell(time.time(), d.x * w, d.y * h, card=d.card)
                     # vol mesuré depuis la DÉCISION : c'est ce délai que brain.SPELL_IMPACT_S doit prévoir
                     self.spells_pending.append({"card": d.card, "x": d.x, "y": d.y, "t_tap": now})
                 log.append({"t": round(now, 2), "card": d.card, "x": round(d.x, 3), "y": round(d.y, 3), "tile": d.tile,

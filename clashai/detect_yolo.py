@@ -27,7 +27,7 @@ WEIGHTS = ROOT / "models/yolo/clashai_yolo11s.engine"      # repli : le .pt à c
 ARENA = (0.020, 0.035, 0.960, 0.684)
 ARENA_SIZE = (568, 896)
 IMGSZ = 896                     # remplacé par models/yolo/clashai_yolo11s.json si le modèle adopté en demande une autre
-UI = {"bar", "bar-level", "tower-bar", "king-tower-bar", "dagger-duchess-tower-bar", "elixir",
+UI = {"bar", "bar-level", "tower-bar", "king-tower-bar", "dagger-duchess-tower-bar", "skeleton-king-bar", "elixir",
       "clock", "emote", "evolution-symbol", "ice-spirit-evolution-symbol", "text", "selected"}
 
 

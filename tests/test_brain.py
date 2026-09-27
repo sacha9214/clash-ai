@@ -210,3 +210,12 @@ def test_lone_giant_is_answered_by_mini_pekka_not_the_cheapest_card():
     d = b.decide([enemy("giant", 3, 19, vy_tiles=0.8)], ["knight", "mini-pekka", "archers", "valkyrie"], ALL, 6.0, 100.0)
     assert d is not None and d.card == "mini-pekka"
     assert not Brain._duel("knight", [enemy("giant", 3, 19)], near_tower=False)[0]
+
+
+def test_evolved_goblin_barrel_gets_the_valkyrie_and_ui_bars_are_not_units():
+    barrel = _FakeUnit("goblin-barrel-evolution", (100, 700, 140, 740), (0.0, 0.0))
+    bar = _FakeUnit("skeleton-king-bar", (300, 300, 340, 310), (0.0, 0.0))
+    seen = Brain.to_seen([barrel, bar], 578, 1280, None, fps=0)
+    assert [s.name for s in seen] == ["goblin-barrel"]
+    d = brain().decide(seen, ["valkyrie", "knight", "arrows", "giant"], ALL, 6.0, 100.0)
+    assert d is not None and d.card == "valkyrie"

@@ -41,7 +41,7 @@ TRACKER_CFG = ROOT / "third_party/KataCR/katacr/yolov8/bytetrack.yaml"
 ARENA = (0.020, 0.035, 0.960, 0.684)
 ARENA_SIZE = (568, 896)
 # Éléments d'interface détectés mais inutiles à afficher comme « unités »
-UI = {"bar", "bar-level", "tower-bar", "king-tower-bar", "dagger-duchess-tower-bar", "elixir",
+UI = {"bar", "bar-level", "tower-bar", "king-tower-bar", "dagger-duchess-tower-bar", "skeleton-king-bar", "elixir",
       "clock", "emote", "evolution-symbol", "ice-spirit-evolution-symbol"}
 UI |= {n for n in idx2unit.values() if n.startswith("padding")}
 

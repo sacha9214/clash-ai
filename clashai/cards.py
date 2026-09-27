@@ -56,4 +56,4 @@ NOT_UNITS = {"arrows", "fireball", "zap", "zap-evolution", "poison", "earthquake
              "lightning", "rocket", "the-log", "tornado", "giant-snowball", "barbarian-barrel",
              "royal-delivery", "graveyard", "clone", "mirror", "goblin-barrel", "skeleton-barrel",
              "dirt", "bomb", "axe", "goblin-ball", "skeleton-king-skill", "tesla-evolution-shock",
-             "selected", "text", "phoenix-egg"}
+             "selected", "text", "phoenix-egg", "skeleton-king-bar", "barbarian-barrel-hero", "goblin-barrel-evolution"}

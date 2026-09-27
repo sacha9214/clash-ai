@@ -197,8 +197,10 @@ class Brain:
     def to_seen(units: list[Unit], w: int, h: int, trails: dict | None, fps: float) -> list[Seen]:
         out = []
         for u in units:
-            if (u.name in SPAWNERS or u.name == "goblin-barrel") and u.enemy:
-                out.append(Seen(u.name, True, (u.box[0] + u.box[2]) / 2 / w, (u.box[1] + u.box[3]) / 2 / h))
+            barrel = u.name in ("goblin-barrel", "goblin-barrel-evolution")     # Tonneau évolué : même défense
+            if (u.name in SPAWNERS or barrel) and u.enemy:
+                out.append(Seen("goblin-barrel" if barrel else u.name, True,
+                                (u.box[0] + u.box[2]) / 2 / w, (u.box[1] + u.box[3]) / 2 / h))
                 continue
             if u.name in BUILDINGS or u.name in NOT_UNITS:
                 continue
