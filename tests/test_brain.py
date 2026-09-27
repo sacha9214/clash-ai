@@ -68,7 +68,7 @@ def test_fireball_group_musketeer_knight():
     assert d is not None and d.card == "fireball"
 
 
-def test_arrows_on_minions_but_not_on_skeletons_far_away():
+def test_arrows_on_minions_but_not_on_skeletons_far_away(old_deck):
     b = brain(arrows_min=3)
     minions = [enemy("minion", 9 + i % 2, 8 + i // 2) for i in range(3)]
     d = b.decide(minions, ["arrows", "giant", "knight", "valkyrie"], [True, False, False, False], 3.5, 100.0)
@@ -78,7 +78,7 @@ def test_arrows_on_minions_but_not_on_skeletons_far_away():
     assert d is None
 
 
-def test_arrows_on_goblins_hitting_our_side():
+def test_arrows_on_goblins_hitting_our_side(old_deck):
     b = brain(arrows_min=3)
     gob = [enemy("goblin", 3 + i % 2, 22 + i // 2) for i in range(3)]
     d = b.decide(gob, ["arrows", "giant", "cannon", "fireball"], [True, False, False, False], 3.5, 100.0)
@@ -332,7 +332,7 @@ def test_fireball_finishes_an_almost_dead_tower_without_touching_the_king():
     assert not _hits_enemy_king("fireball", d.x, d.y)
 
 
-def test_arrows_finish_off_centre_and_not_on_a_healthy_tower():
+def test_arrows_finish_off_centre_and_not_on_a_healthy_tower(old_deck):
     b = brain()
     b.match = _low_tower_match(0.02)
     d = b.decide([], ["arrows", "knight", "giant", "cannon"], [True, False, False, False], 3.5, 1000.0)
@@ -349,7 +349,7 @@ def test_no_finish_when_hp_reading_is_unproven():
 
 
 # ---- contre-attaque avec les survivants ----
-def test_counter_push_behind_a_surviving_defender():
+def test_counter_push_behind_a_surviving_defender(old_deck):
     b = brain(counter_support=True, edge_push=0)
     b.played(Decision("knight", 0, *at(3, 22), "défense : goblin -> knight", trade=1.0, push=2.0), 95.0)
     survivor = ours("knight", 3, 20, vy_tiles=-1.0)          # il repart vers le pont
@@ -390,3 +390,14 @@ def test_no_ground_only_card_against_flyers():
     d = b.decide([enemy("minion", 3, 24), enemy("minion", 4, 24), enemy("minion", 3, 25)],
                  ["mini-pekka", "giant", "cannon", "fireball"], ALL, 8.0, 100.0)
     assert d is None or d.card != "mini-pekka"
+
+
+import pytest
+
+
+@pytest.fixture
+def old_deck(monkeypatch):
+    """Archères et Flèches (ancien deck, sur le banc depuis le 27/09) : leurs règles restent testées."""
+    from clashai.cards import BENCH, DECK
+    for c in ("archers", "arrows"):
+        monkeypatch.setitem(DECK, c, BENCH[c])

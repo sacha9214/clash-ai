@@ -33,7 +33,7 @@ DONE = ROOT / "runs/detector/dc_done.json"
 sys.path.insert(0, str(ROOT))
 CONF_CONFLICT = 0.12       # une unité vue même faiblement (>= 0.12) sans accord complet = image écartée
 CONF_KEEP = 0.35           # une unité étiquetée doit être vue à >= 0.35 par les deux modèles
-OWN_UNITS = {"archers": "archer", "knight": "knight", "valkyrie": "valkyrie", "mini-pekka": "mini-pekka",
+OWN_UNITS = {"archers": "archer", "musketeer": "musketeer", "minions": "minion", "knight": "knight", "valkyrie": "valkyrie", "mini-pekka": "mini-pekka",
              "giant": "giant", "cannon": "cannon"}
 WHY: dict = {}                             # raisons de rejet (diagnostic)
 LINK = 0.10                                # distance max (fraction de la largeur) entre deux captures (1,5 s)

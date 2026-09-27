@@ -25,16 +25,16 @@ DECK = {c.name: c for c in [
     Card("knight", 3, "troop", role="mini-tank", units=("knight",)),
     Card("mini-pekka", 4, "troop", role="dps", units=("mini-pekka",)),
     Card("cannon", 3, "building", role="defense-building", units=("cannon",)),
-    Card("archers", 3, "troop", "air+ground", role="dps", units=("archer",)),
+    Card("musketeer", 4, "troop", "air+ground", role="dps", units=("musketeer",)),
     Card("valkyrie", 4, "troop", role="splash", units=("valkyrie",)),
-    Card("arrows", 3, "spell", "air+ground", role="spell-small", radius=0.14),
+    Card("minions", 3, "troop", "air+ground", flying=True, role="swarm", units=("minion",)),
     Card("fireball", 4, "spell", "air+ground", role="spell-big", radius=0.11),
 ]}
 
 # Cartes connues hors deck (utile si on les remet)
 BENCH = {c.name: c for c in [
-    Card("musketeer", 4, "troop", "air+ground", role="dps", units=("musketeer",)),
-    Card("minions", 3, "troop", "air+ground", flying=True, role="swarm", units=("minion",)),
+    Card("archers", 3, "troop", "air+ground", role="dps", units=("archer",)),
+    Card("arrows", 3, "spell", "air+ground", role="spell-small", radius=0.14),
     Card("spear-goblins", 2, "troop", "air+ground", role="swarm", units=("spear-goblin",)),
 ]}
 
