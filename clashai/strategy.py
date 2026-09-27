@@ -1,6 +1,7 @@
-"""Apprentissage des stratégies : à chaque combat on essaie une variante, on retient
-lesquelles gagnent (bandit de Thompson : on joue surtout les meilleures, mais on
-continue d'explorer les autres et on en invente de nouvelles en mutant les gagnantes).
+"""Apprentissage des stratégies : à chaque combat on joue une combinaison de paramètres et on retient
+ce qui gagne. Bandit de Thompson factorisé : chaque paramètre est appris séparément (toutes les parties
+jouées avec la valeur v comptent pour v), donc chaque combat renseigne tous les paramètres à la fois,
+au lieu d'une seule combinaison parmi des milliers qui ne serait presque jamais rejouée.
 """
 from __future__ import annotations
 
@@ -9,17 +10,18 @@ import random
 from pathlib import Path
 
 STATS = Path(__file__).resolve().parents[1] / "runs/strategy_stats.json"
+PRIOR_N = 2.0   # a priori = taux de victoire global, pesant 2 parties : une valeur jamais jouée est essayée sans tout écraser
 
-# Paramètres réglables du cerveau et leurs plages
+# Paramètres réglables du cerveau et leurs plages (la valeur de DEFAULT doit y figurer)
 SPACE = {
     "giant_elixir": [7, 8, 9],              # élixir minimum pour lancer le Géant (la barre se lit au plus ~9.5 : pas 10)
     "giant_spot": ["king", "back", "corner", "mid", "bridge"],   # derrière le Roi, au fond côté, dans le coin, au milieu, au pont
     "support_min_elixir": [3, 4, 5],        # soutien derrière le Géant dès que…
     "arrows_min": [2, 3, 4],                # taille de groupe minimale pour Flèches
     "fireball_min": [1, 2, 3],              # … pour Boule de feu (1 = accepte une grosse cible seule)
-    "defend_line": [0.0, 0.05, 0.10],       # on défend quand l'ennemi est à cette distance au-delà de la rivière
+    "defend_line": [0.0, 0.05, 0.06, 0.10],  # on défend quand l'ennemi est à cette distance au-delà de la rivière
     "counter_push": [False, True],          # après une défense réussie, relancer dans le même couloir
-    "cycle_at": [7.0, 8.0, 9.0, 9.5, 10.0],  # rien à faire : on fait tourner une carte au fond à partir de…
+    "cycle_at": [7.0, 8.0, 9.0, 9.5],       # rien à faire : on fait tourner une carte au fond à partir de… (pas 10 : illisible)
     "punish_low_elixir": [False, True],     # attaquer dès que l'élixir estimé de l'ennemi est bas
     "fireball_spawners": [False, True],     # Boule de feu sur les bâtiments qui produisent des unités
     "ignore_small": [False, True],          # laisser les tours gérer 1-2 petites unités
@@ -27,65 +29,106 @@ SPACE = {
     "punish_opposite": [False, True],       # l'ennemi pose une carte lourde -> Mini P.E.K.K.A/Chevalier au pont, autre couloir
     "giant_when_counter_out": [False, True],  # Géant plus tôt quand ses contres connus ne sont plus dans sa main
     "fireball_patient": [False, True],      # Boule de feu sur cible seule : seulement si elle touche aussi une tour
-    "placement_model": [True, False],
-    "stat_defense": [True, False],          # défenseur choisi par combat simulé (statistiques) plutôt que listes fixes       # « où poser » appris des pros (vidéos) plutôt que par les règles
+    "placement_model": [True, False],       # « où poser » appris des pros (vidéos) plutôt que par les règles
+    "stat_defense": [True, False],          # défenseur choisi par combat simulé (statistiques) plutôt que listes fixes
+    "spell_value": [0.6, 0.8, 1.0],         # sort lancé seulement s'il détruit au moins spell_value x son coût en élixir
 }
 DEFAULT = {"giant_elixir": 9, "giant_spot": "king", "support_min_elixir": 4, "arrows_min": 3,
            "fireball_min": 2, "defend_line": 0.06, "counter_push": True, "cycle_at": 9.5,
            "punish_low_elixir": False, "fireball_spawners": False,
            "ignore_small": True, "punish_opposite": False, "giant_when_counter_out": False,
-           "fireball_patient": False, "placement_model": True, "stat_defense": True}
+           "fireball_patient": False, "placement_model": True, "stat_defense": True, "spell_value": 0.8}
 
 
 def _key(p: dict) -> str:
     return json.dumps(p, sort_keys=True)
 
 
+# Fonctions ajoutées après les premiers matchs (26-27/09) : une partie enregistrée SANS ce paramètre a été jouée
+# sans la fonction -> elle compte pour « désactivé », pas pour la valeur par défaut d'aujourd'hui.
+# spell_value 0.0 = pas de seuil de valeur (ancien comportement), valeur qui n'est plus proposée.
+LEGACY = {"placement_model": False, "stat_defense": False, "spell_value": 0.0}
+
+
+def complete(p: dict) -> dict:
+    """Paramètres complets : ceux qui n'existaient pas encore prennent leur valeur « ancienne » (LEGACY), sinon DEFAULT."""
+    return {**DEFAULT, **LEGACY, **p}
+
+
+def normalize(stats: dict) -> dict:
+    """Même format, variantes complétées par DEFAULT, fusionnées si identiques ; celles sans partie sont oubliées."""
+    out = {}
+    for v in stats.values():
+        p = complete(v["params"])
+        s = out.setdefault(_key(p), {"params": p, "wins": 0, "losses": 0})
+        s["wins"] += v.get("wins", 0)
+        s["losses"] += v.get("losses", 0)
+    return {k: v for k, v in out.items() if v["wins"] + v["losses"]}
+
+
 def load() -> dict:
     seed = STATS.parents[1] / "learning/strategy_stats.json"   # état versionné sur GitHub
     if not STATS.exists() and seed.exists():
         STATS.parent.mkdir(parents=True, exist_ok=True)
-        STATS.write_text(seed.read_text())
-    if STATS.exists():
-        stats = json.loads(STATS.read_text())
-        # vidéos de pros (compare_placements.py, 8 vidéos) : Géant derrière le Roi (12/23, dont 10 gagnants) ou
-        # au milieu (10/23), dans le couloir où ils viennent de jouer. On ajoute la meilleure variante actuelle dans ce style, sans victoire inventée :
-        # le bandit l'essaiera et la jugera sur de vrais matchs.
-        if stats:
-            best = max(stats.values(), key=lambda v: (v["wins"] + 1) / (v["wins"] + v["losses"] + 2))["params"]
-            for spot in ("king", "mid"):
-                pro = {**DEFAULT, **best, "giant_spot": spot, "counter_push": True}
-                stats.setdefault(_key(pro), {"params": pro, "wins": 0, "losses": 0})
-        return stats
-    return {_key(DEFAULT): {"params": DEFAULT, "wins": 0, "losses": 0}}
+        STATS.write_text(seed.read_text(encoding="utf-8"), encoding="utf-8")
+    return normalize(json.loads(STATS.read_text(encoding="utf-8"))) if STATS.exists() else {}
 
 
 def save(stats: dict) -> None:
     STATS.parent.mkdir(parents=True, exist_ok=True)
-    STATS.write_text(json.dumps(stats, indent=1))
+    STATS.write_text(json.dumps(stats, indent=1), encoding="utf-8")
 
 
-def mutate(p: dict) -> dict:
-    q = dict(DEFAULT, **p)
-    for k in random.sample(list(SPACE), k=random.choice([1, 2])):
-        q[k] = random.choice([v for v in SPACE[k] if v != q[k]])
+def _counts(stats: dict) -> tuple[dict, int, int]:
+    """{paramètre: {valeur: [victoires, défaites]}} sur toutes les variantes, + totaux."""
+    c = {k: {} for k in SPACE}
+    wins = losses = 0
+    for v in stats.values():
+        p, w, l = complete(v["params"]), v.get("wins", 0), v.get("losses", 0)
+        wins, losses = wins + w, losses + l
+        for k in SPACE:
+            wl = c[k].setdefault(p[k], [0, 0])
+            wl[0] += w
+            wl[1] += l
+    return c, wins, losses
+
+
+def _prior(wins: int, losses: int) -> tuple[float, float]:
+    """Beta(a, b) centrée sur le taux global : une valeur jamais jouée vaut « la moyenne, à peu près »."""
+    p0 = (wins + 1) / (wins + losses + 2)
+    return PRIOR_N * p0, PRIOR_N * (1 - p0)
+
+
+def mutate(p: dict, rng: random.Random | None = None) -> dict:
+    rng = rng or random
+    q = complete(p)
+    for k in rng.sample(list(SPACE), k=rng.choice([1, 2])):
+        q[k] = rng.choice([v for v in SPACE[k] if v != q[k]])
     return q
 
 
-def choose(stats: dict, explore: float = 0.45) -> dict:
-    """Thompson : tirer une proba de victoire Beta(v+1, d+1) par variante, prendre la meilleure.
-    Parfois (explore) : nouvelle variante, mutation de la meilleure actuelle."""
-    draws = {k: random.betavariate(v["wins"] + 1, v["losses"] + 1) for k, v in stats.items()}
-    best = max(draws, key=draws.get)
-    if random.random() < explore:
-        new = mutate(stats[best]["params"])
-        stats.setdefault(_key(new), {"params": new, "wins": 0, "losses": 0})
-        return new
-    return stats[best]["params"]
+def choose(stats: dict, explore: float = 0.1, rng: random.Random | None = None) -> dict:
+    """Thompson par paramètre : pour chaque valeur possible, tirer une proba de victoire Beta(v + a, d + b)
+    sur toutes les parties jouées avec cette valeur, garder la meilleure.
+    Parfois (explore) : un paramètre au hasard prend sa valeur la moins essayée."""
+    rng = rng or random
+    counts, wins, losses = _counts(stats)
+    a, b = _prior(wins, losses)
+    p = dict(DEFAULT)
+    for k, vals in SPACE.items():
+        draws = [rng.betavariate(w + a, l + b) for w, l in (counts[k].get(v, (0, 0)) for v in vals)]
+        p[k] = vals[draws.index(max(draws))]
+    if rng.random() < explore:
+        k = rng.choice(list(SPACE))
+        tries = [sum(counts[k].get(v, (0, 0))) for v in SPACE[k]]
+        p[k] = rng.choice([v for v, n in zip(SPACE[k], tries) if n == min(tries)])
+    stats.setdefault(_key(p), {"params": p, "wins": 0, "losses": 0})
+    return p
 
 
 def record(stats: dict, params: dict, result: str) -> None:
-    s = stats.setdefault(_key(params), {"params": params, "wins": 0, "losses": 0})
+    p = complete(params)
+    s = stats.setdefault(_key(p), {"params": p, "wins": 0, "losses": 0})
     if result == "win":
         s["wins"] += 1
     elif result == "loss":
@@ -94,6 +137,22 @@ def record(stats: dict, params: dict, result: str) -> None:
 
 
 def leaderboard(stats: dict) -> list[tuple[float, int, int, dict]]:
-    rows = [((v["wins"] + 1) / (v["wins"] + v["losses"] + 2), v["wins"], v["losses"], v["params"])
+    """Combinaisons jouées, meilleure d'abord (même a priori que choose : peu de parties -> proche du taux global)."""
+    stats = normalize(stats)
+    a, b = _prior(sum(v["wins"] for v in stats.values()), sum(v["losses"] for v in stats.values()))
+    rows = [((v["wins"] + a) / (v["wins"] + v["losses"] + a + b), v["wins"], v["losses"], v["params"])
             for v in stats.values()]
     return sorted(rows, key=lambda r: -r[0])
+
+
+def param_table(stats: dict) -> dict[str, list[tuple[object, int, int, float]]]:
+    """Par paramètre : [(valeur, victoires, défaites, proba de victoire a posteriori)], meilleure d'abord.
+    Toutes les valeurs de SPACE (jamais jouée = a priori), plus les anciennes valeurs vues dans stats."""
+    counts, wins, losses = _counts(stats)
+    a, b = _prior(wins, losses)
+    table = {}
+    for k in SPACE:
+        vals = list(SPACE[k]) + [v for v in counts[k] if v not in SPACE[k]]
+        rows = [(v, *counts[k].get(v, (0, 0))) for v in vals]
+        table[k] = sorted(((v, w, l, (w + a) / (w + l + a + b)) for v, w, l in rows), key=lambda r: -r[3])
+    return table
