@@ -411,9 +411,11 @@ class Brain:
             # dégâts que la tour prendrait si on ne fait RIEN : leurs dégâts/s x le temps que la tour met à les tuer
             # seule (~60 dégâts/s, niveau 1). Petit (< ~12 % d'une tour) : la tour s'en charge, on garde l'élixir
             # (match du 27/09 : Chevalier puis Mini P.E.K.K.A sur un Golem de glace, Canon sur 1 squelette)
-            hp = sum(card_info.combat(t.name)["hp"] for t in threats)
-            dps = sum(card_info.combat(t.name)["dps"] for t in threats)
-            if dps * hp / 60 < 170:
+            st = [card_info.combat(t.name) for t in threats]
+            hp, dps = sum(s["hp"] for s in st), sum(s["dps"] for s in st)
+            # stats inconnues (Boss Bandit, Petit Prince… : PV ou dégâts à 0 dans la base) : « inoffensif » serait
+            # faux -> on défend
+            if all(s["hp"] and s["dps"] for s in st) and dps * hp / 60 < 170:
                 threats = []
         if threats:
             return self._defend(threats, playable)

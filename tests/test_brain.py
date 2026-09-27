@@ -360,3 +360,10 @@ def test_no_counter_push_without_recent_defense_or_with_an_enemy_still_here():
     b0 = brain(counter_support=False, edge_push=0)
     b0.played(Decision("knight", 0, *at(3, 22), "défense : goblin -> knight"), 95.0)
     assert b0.decide([ours("knight", 3, 20, vy_tiles=-1.0)], hand, ALL, 5.0, 100.0) is None
+
+
+def test_unknown_stats_threat_is_still_defended():
+    # Boss Bandit : PV/dégâts absents de la base -> ne doit pas passer pour « inoffensif »
+    d = brain().decide([enemy("boss-bandit", 3, 20, vy_tiles=1.0)], ["knight", "mini-pekka", "arrows", "fireball"],
+                       ALL, 6.0, 100.0)
+    assert d is not None and d.reason.startswith("défense")
