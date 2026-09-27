@@ -155,7 +155,8 @@ def main():
                 # alterne : centre (coffre, carte) et bouton OK des écrans « niveau supérieur »
                 taps = getattr(dev, "_reward_taps", 0)
                 dev._reward_taps = taps + 1
-                dev.tap(*B.px(img, 0.5, 0.42 if taps % 2 == 0 else 0.66))
+                # + le bouton OK tout en bas (nouvelle arène : écran pris pour un coffre, bloqué 50 min le 27/09)
+                dev.tap(*B.px(img, 0.5, (0.42, 0.66, 0.966)[taps % 3]))
                 time.sleep(1.3)
                 unknown_since = None
             else:
