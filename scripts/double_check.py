@@ -1,7 +1,7 @@
 """Ré-étiquetage automatique à DOUBLE VÉRIFICATION des captures de nos matchs (tourne pendant qu'on joue).
 
 Une unité n'est étiquetée que si tout concorde :
-  1. deux détecteurs : le scanner actuel (1024 px) et l'ancien (v1, 896 px) voient la même unité au même endroit ;
+  1. deux avis : le scanner voit la même unité au même endroit sur l'image ET sur l'image retournée gauche-droite ;
   2. la couleur du badge (bleu = nous, rouge = eux) confirme le camp, ou les deux détecteurs sont d'accord ;
   3. le jeu : l'unité est dans NOTRE deck (côté bleu) ou dans le deck vu de l'adversaire (côté rouge, sorties
      de générateurs comprises) ; une unité à nous n'apparaît pas pour la première fois chez l'ennemi ;
@@ -35,6 +35,7 @@ CONF_CONFLICT = 0.12       # une unité vue même faiblement (>= 0.12) sans acco
 CONF_KEEP = 0.35           # une unité étiquetée doit être vue à >= 0.35 par les deux modèles
 OWN_UNITS = {"archers": "archer", "knight": "knight", "valkyrie": "valkyrie", "mini-pekka": "mini-pekka",
              "giant": "giant", "cannon": "cannon"}
+WHY: dict = {}                             # raisons de rejet (diagnostic)
 LINK = 0.10                                # distance max (fraction de la largeur) entre deux captures (1,5 s)
 
 
@@ -91,7 +92,12 @@ def process(game: str, det_a, det_b, names_v2: dict) -> tuple[int, int]:
         if img is None or not B.in_battle(img):
             continue
         crop, _ = det_a._crop(img)
-        pa, pb = preds(det_a.model, crop, det_a.imgsz), preds(det_b.model, crop, det_b.imgsz)
+        pa = preds(det_a.model, crop, det_a.imgsz)
+        # 2e avis : le même scanner sur l'image RETOURNÉE gauche-droite (autre point de vue, reste valable quand
+        # le scanner progresse ; l'ancien modèle v1 divergeait de plus en plus et faisait tout rejeter)
+        W0 = crop.shape[1]
+        pb = [(n, sd, c, [W0 - b[2], b[1], W0 - b[0], b[3]])
+              for n, sd, c, b in preds(det_a.model, cv2.flip(crop, 1), det_a.imgsz)]
         units, good, used = [], True, set()
         for name, side, conf, box in sorted(pa, key=lambda p: -p[2]):
             j = max((k for k, q in enumerate(pb) if k not in used and q[0] == name and iou(q[3], box) >= 0.4),
@@ -103,27 +109,27 @@ def process(game: str, det_a, det_b, names_v2: dict) -> tuple[int, int]:
                     used.add(j)
                 continue
             if j is None or min(conf, pb[j][2]) < CONF_KEEP:
-                good = False                      # vue par un seul modèle, ou trop faiblement
+                good = False; WHY['un seul modèle'] = WHY.get('un seul modèle', 0) + 1
                 break
             used.add(j)
             color = team_color(crop, tuple(int(v) for v in box))
             sides = {side, pb[j][1]} | ({1 if color > 0 else 0} if color else set())
             if len(sides) != 1:
-                good = False                      # camp contradictoire
+                good = False; WHY['camp'] = WHY.get('camp', 0) + 1
                 break
             if name not in (enemy_ok if side == 1 else own_ok):
-                good = False                      # carte absente du deck de ce camp
+                good = False; WHY['hors deck'] = WHY.get('hors deck', 0) + 1
                 break
             units.append((name, side, box))
         if good and any(k not in used and "tower" not in q[0] for k, q in enumerate(pb)):
-            good = False                          # l'ancien modèle voit une unité que le nouveau ne voit pas
+            good = False; WHY['vu par l ancien seul'] = WHY.get('vu par l ancien seul', 0) + 1
         # nos troupes posées il y a 1 à 8 s doivent être étiquetées : sinon le scanner les a ratées
         # (nos Archères surtout) et l'image apprendrait « rien ici »
         key = int(Path(f).stem)
         for pl in plays:
             dt = (key - int(pl["t"] * 10) % 10**7) / 10
             if 1.0 <= dt <= (25.0 if pl["card"] == "archers" else 8.0) and not any(n == OWN_UNITS[pl["card"]] and sd == 0 for n, sd, _ in units):
-                good = False
+                good = False; WHY['notre troupe ratée'] = WHY.get('notre troupe ratée', 0) + 1
         frames.append((f, crop, units, good))
     # 4. cohérence sur la partie : une unité suivie d'une capture à l'autre ne change pas de camp, et une unité
     # à nous ne naît pas chez l'ennemi (au-dessus de la rivière)
@@ -138,9 +144,9 @@ def process(game: str, det_a, det_b, names_v2: dict) -> tuple[int, int]:
             p = min((q for q in prev if q[0] == name and abs(q[2] - cx) < LINK and abs(q[3] - cy) < LINK * W / H),
                     key=lambda q: abs(q[2] - cx) + abs(q[3] - cy), default=None)
             if p and p[1] != side:
-                good = False
+                good = False; WHY['change de camp'] = WHY.get('change de camp', 0) + 1
             if not p and side == 0 and cy < 0.40 and name not in ("archer",):
-                good = False
+                good = False; WHY['à nous chez l ennemi'] = WHY.get('à nous chez l ennemi', 0) + 1
             cur.append((name, side, cx, cy))
         prev = cur
         frames[i] = (f, crop, units, good)
@@ -175,13 +181,13 @@ def main():
         print("rien de nouveau")
         return
     det_a = Detector(track=False)
-    det_b = Detector(track=False, weights=str(ROOT / "models/yolo/clashai_yolo11s_before_v2.engine"))
-    det_b.imgsz = 896
+    det_b = None
     for g in games:
         kept, total = process(g, det_a, det_b, names_v2)
         done[g] = {"kept": kept, "frames": total, "test": is_test_game(g)}
         DONE.write_text(json.dumps(done, indent=1))
-        print(f"{g} : {kept}/{total} images validées ({'test' if is_test_game(g) else 'apprentissage'})", flush=True)
+        print(f"{g} : {kept}/{total} images validées ({'test' if is_test_game(g) else 'apprentissage'}) rejets {WHY}", flush=True)
+        WHY.clear()
 
 
 if __name__ == "__main__":
