@@ -475,7 +475,7 @@ class Brain:
             order = ["knight", "valkyrie", "mini-pekka", "musketeer", "archers", "minions"]
         # Canon : le bâtiment au centre attire les tanks (Géant, Hog…) entre les deux tours
         if "cannon" in playable and not is_air and (is_tank or t.name in FAST_BUILDING_HUNTERS or t.name in SINGLE_MELEE
-                                                     or swarm >= 2 or _cost(t.name) >= 3):
+                                                     or _cost(t.name) >= 3):   # pas contre les nuées : 1 cible à la fois
             col = 8 if lane_x < 0.5 else 9             # centre, côté de la menace
             if t.name in FAST_BUILDING_HUNTERS:
                 row, why = OWN_FIRST_ROW + 4, "4 cases sous la rivière : le Cochon est dévié entre les 2 tours"
