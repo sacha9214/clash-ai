@@ -649,6 +649,8 @@ class Brain:
         for card in playable:
             if card not in DECK or DECK[card].kind == "spell" or card == "giant":
                 continue
+            if all(g.name in AIR_UNITS for g in group) and not card_info.combat(card)["hits_air"]:
+                continue                # ne peut pas les toucher (Mini P.E.K.K.A contre des Gargouilles) : élixir perdu
             r = self._duel(card, group, near_tower)
             if r:
                 win, margin, t_kill = r
