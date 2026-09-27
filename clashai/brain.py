@@ -289,6 +289,14 @@ class Brain:
             # une unité seule à 1-2 élixir : nos défenseurs coûtent 3+, la tour encaisse, on gagne l'échange
             elif len(threats) == 1 and threats[0].name not in TANK_UNITS and _cost(threats[0].name) <= 2:
                 threats = []
+        if threats and self.p.get("stat_defense", True) and not any(self._tower_low(_lane(t.x)) for t in threats):
+            # dégâts que la tour prendrait si on ne fait RIEN : leurs dégâts/s x le temps que la tour met à les tuer
+            # seule (~60 dégâts/s, niveau 1). Petit (< ~12 % d'une tour) : la tour s'en charge, on garde l'élixir
+            # (match du 27/09 : Chevalier puis Mini P.E.K.K.A sur un Golem de glace, Canon sur 1 squelette)
+            hp = sum(card_info.combat(t.name)["hp"] for t in threats)
+            dps = sum(card_info.combat(t.name)["dps"] for t in threats)
+            if dps * hp / 60 < 170:
+                threats = []
         if threats:
             d = self._defend(threats, playable)
             if d:
