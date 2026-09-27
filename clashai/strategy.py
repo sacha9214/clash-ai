@@ -45,6 +45,11 @@ DEFAULT = {"giant_elixir": 9, "giant_spot": "king", "support_min_elixir": 4, "ar
            "edge_push": 3, "endgame": True, "finish_towers": True, "counter_support": True}
 
 
+# Fonctions qui ont fait leurs preuves : plus tirées au hasard (27/09 : une défaite en 15 coups avec les trois
+# coupées par l'exploration — Valkyrie sur des Squelettes, Mousquetaire sur un Gobelin)
+PINNED = {"stat_defense": True, "ignore_small": True, "placement_model": True}
+
+
 def _key(p: dict) -> str:
     return json.dumps(p, sort_keys=True)
 
@@ -125,9 +130,10 @@ def choose(stats: dict, explore: float = 0.1, rng: random.Random | None = None) 
         draws = [rng.betavariate(w + a, l + b) for w, l in (counts[k].get(v, (0, 0)) for v in vals)]
         p[k] = vals[draws.index(max(draws))]
     if rng.random() < explore:
-        k = rng.choice(list(SPACE))
+        k = rng.choice([k for k in SPACE if k not in PINNED])
         tries = [sum(counts[k].get(v, (0, 0))) for v in SPACE[k]]
         p[k] = rng.choice([v for v, n in zip(SPACE[k], tries) if n == min(tries)])
+    p.update(PINNED)
     stats.setdefault(_key(p), {"params": p, "wins": 0, "losses": 0})
     return p
 
