@@ -70,16 +70,37 @@ def spell_radius(card: str, default: float = 3.0) -> float:
     return _num(cur.get("Radius")) or (e.get("spell") or {}).get("radius_tiles") or default
 
 
+# Les valeurs « niveau 1 » des fichiers du jeu sont au PREMIER niveau de chaque rareté (commune 1, rare 3, épique 6,
+# légendaire 9, champion 11) : +10 % par niveau. Vérifié sur la base (PV niveau 11 / niveau 1) : commune 2.56,
+# rare 2.12, épique 1.60. On ramène tout au niveau 1 d'une commune pour comparer des cartes de même niveau.
+RARITY_FACTOR = {"common": 1.0, "rare": 1.1 ** 2, "epic": 1.1 ** 5, "legendary": 1.1 ** 8, "champion": 1.1 ** 10}
+
+
+def _rarity_factor(e: dict) -> float:
+    return RARITY_FACTOR.get(str(e.get("rarity") or "common").lower(), 1.0)
+
+
+def spell_damage(card: str) -> float:
+    """Dégâts d'un sort sur une troupe, à la même échelle que combat() (toutes les vagues : Flèches = 3 vagues)."""
+    e = db().get(card, {})
+    lvl1 = (e.get("spell") or {}).get("damage_lvl1")
+    l11 = str(((e.get("current") or {}).get("level11") or e.get("level11") or {}).get("Area Damage") or "")
+    waves = re.search(r"x\s*(\d+)", l11)
+    if lvl1:
+        return lvl1 * (int(waves.group(1)) if waves else 1) / _rarity_factor(e)
+    return (_num(l11) or 0) / 2.56
+
+
 @lru_cache(maxsize=512)
 def combat(name: str) -> dict:
-    """Pour un combat estimé : PV et dégâts/s PAR UNITÉ (niveau 1, fichiers du jeu : tout est à la même échelle),
-    nombre d'unités de la carte, ce qu'elle peut toucher, dégâts de zone."""
+    """Pour un combat estimé : PV et dégâts/s PAR UNITÉ (ramenés au niveau 1 d'une commune : toutes les cartes à la
+    même échelle), nombre d'unités de la carte, ce qu'elle peut toucher, dégâts de zone."""
     card = card_for_unit(name)
     e = db().get(card or "", {})
     u = (e.get("units") or [{}])[0]
     i = info(name)
-    dmg, hs = u.get("damage_lvl1") or 0, u.get("hit_speed_s") or i["hit_speed"] or 1.0
-    hp = u.get("hp_lvl1") or 0
+    dmg, hs = (u.get("damage_lvl1") or 0) / _rarity_factor(e), u.get("hit_speed_s") or i["hit_speed"] or 1.0
+    hp = (u.get("hp_lvl1") or 0) / _rarity_factor(e)
     if not hp or not dmg:
         # cartes sans stats de niveau 1 (récentes…) : valeurs niveau 11 du wiki ramenées au niveau 1 (÷2.56,
         # rapport mesuré sur le Chevalier : 1766 / 690) pour rester à la même échelle que les autres

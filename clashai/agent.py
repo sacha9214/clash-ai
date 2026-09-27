@@ -240,6 +240,7 @@ class Agent:
                             "units": [(u.name, u.enemy, u.center) for u in units]})
                 if ok:
                     last_play = time.time()
+                    self.brain.played(d, last_play)   # le cerveau ne retient que les cartes vraiment posées
                     _save(os.path.join(folder, f"play{n:03d}.jpg"), self.annotate(img, units, d, info))
                     n += 1
                 else:

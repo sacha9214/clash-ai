@@ -70,6 +70,7 @@ if a.dry:
         units, d, info = think(img, t, 1 / 0.25)
         if d and t - last_play > 1.0:
             last_play = t
+            brain.played(d, t)
             print(f"{t:6.1f}s  {d.reason:45}  ({d.x:.2f}, {d.y:.2f})")
             cv2.imwrite(f"{a.out}/dry{n_dec:03d}.png", annotate(img, units, d, info))
             n_dec += 1
@@ -99,6 +100,7 @@ else:
                     last_play = time.time() - 0.4
                 if ok:
                     last_play = time.time()
+                    brain.played(d, last_play)
                     print(f"{d.reason:45} ({d.x:.2f}, {d.y:.2f})", flush=True)
                     cv2.imwrite(f"{a.out}/play{n_dec:03d}.png", annotate(img, units, d, info))
                     n_dec += 1

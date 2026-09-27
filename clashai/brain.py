@@ -55,6 +55,17 @@ WIN_CONDITIONS = {"giant", "hog-rider", "royal-giant", "golem", "pekka", "balloo
                   "elixir-golem", "electro-giant", "goblin-giant", "giant-skeleton", "mega-knight"}
 
 
+# Une de « nos » unités de l'autre côté de la rivière sans qu'on ait posé cette carte depuis ce délai : le détecteur
+# s'est trompé de camp (match du 25/09 : Géant ennemi vu « à nous » -> « soutien derrière le Géant » fantôme)
+OWN_UNIT_LIFE_S = 40.0
+TOWER_DPS = 60.0                            # tour princesse, niveau 1 (même échelle que card_info.combat)
+TOWER_RANGE_TILES = 7.5
+TANK_DEADLINE_S = 12.0                      # un tank qui vise les bâtiments, du pont à notre tour : ~9 s de marche + 1er coup
+# Valeur d'un sort (élixir détruit) : une unité sur notre moitié frappe déjà nos tours/troupes -> compte plus ;
+# une tour ennemie dans le cercle encaisse aussi (dégâts réduits aux tours)
+OUR_SIDE_BONUS = 1.3
+SPELL_TOWER_VALUE = {"fireball": 1.0, "arrows": 0.4}
+
 # Rayon réel des sorts dans le jeu (cases) et Roi ennemi (4x4 cases, colonnes 7-11, rangées 0.5-4.5).
 # Toucher le Roi l'ACTIVE : il tire pour le reste du match -> nos sorts ne doivent jamais l'effleurer.
 SPELL_RADIUS_TILES = {"arrows": 4.0, "fireball": 2.5}
@@ -102,6 +113,15 @@ def _cost(unit_name: str) -> int:
     return v[1] if v else 3
 
 
+def _unit_value(unit_name: str) -> float:
+    """Élixir que vaut UNE unité : coût de sa carte / nombre d'unités (un gobelin sur 3 = 0.67)."""
+    v = UNIT2CARD.get(unit_name)
+    if v:
+        return v[1] / max(v[2], 1)
+    st = card_info.combat(unit_name)
+    return st["cost"] / max(st["count"], 1)
+
+
 @dataclass
 class Decision:
     card: str
@@ -110,6 +130,9 @@ class Decision:
     y: float
     reason: str
     tile: tuple[int, int] | None = None   # case de la grille 18x32 où la carte est posée
+    # placement tactique précis (Canon qui attire, pont, archères séparées…) : le modèle des pros ne le déplace pas
+    # (Canon : 2.0 cases d'écart avec les pros pour la règle, 4.5 en moyenne pour le modèle)
+    precise: bool = False
 
 
 @dataclass
@@ -167,6 +190,7 @@ class Brain:
             from clashai.placement import load
             self.placer = load()
         self.own_recent: list[tuple[tuple[str, ...], float, float, float]] = []   # (unités, x, y, instant) posées par nous
+        self.own_played: dict[str, float] = {}   # unité -> dernier instant où l'on a posé sa carte
 
     # ---- perception -> monde simplifié ----
     @staticmethod
@@ -180,18 +204,25 @@ class Brain:
                 continue
             x, y = (u.box[0] + u.box[2]) / 2 / w, u.box[3] / h
             vx = vy = 0.0
-            tr = trails.get(u.track_id) if trails else None
-            if tr and len(tr) >= 4 and fps > 0:
-                (ax, ay), (bx, by) = tr[-4], tr[-1]
-                dt = 3 / fps
-                vx, vy = (bx - ax) / w / dt, (by - ay) / h / dt
+            vel = getattr(u, "vel", None)
+            if vel is not None:
+                # vitesse du détecteur (px/s, horodatée) : juste même quand le détecteur tourne aussi pendant la pose
+                # d'une carte (images rapprochées) — l'ancien calcul supposait 3 images = 3 / fps de la boucle
+                vx, vy = vel[0] / w, vel[1] / h
+            else:
+                tr = trails.get(u.track_id) if trails else None
+                if tr and len(tr) >= 4 and fps > 0:
+                    (ax, ay), (bx, by) = tr[-4], tr[-1]
+                    dt = 3 / fps
+                    vx, vy = (bx - ax) / w / dt, (by - ay) / h / dt
             out.append(Seen(u.name, u.enemy, x, y, vx, vy))
         return out
 
     def _virtual_units(self, seen: list[Seen], now: float) -> list[Seen]:
         """Nos unités posées que le détecteur ne voit pas (ex. nos Archères, mal reconnues sur notre écran) :
         l'IA sait où elle les a posées ; elle les fait avancer vers l'ennemi à la vitesse réelle de la carte,
-        s'arrêter quand un ennemi est à leur portée, et les oublie dès que le détecteur les voit (ou après 14 s)."""
+        s'arrêter quand un ennemi est à leur portée, et les oublie dès que le détecteur les voit (ou après 14 s).
+        Elles encaissent les dégâts des ennemis et des tours à portée : une troupe morte ne « couvre » plus rien."""
         out, keep = [], []
         for v in self.virtual:
             if now > v["until"]:
@@ -205,32 +236,68 @@ class Brain:
                 enemy_near = any(s.enemy and _tile_dist(s.x, s.y, v["x"], v["y"]) <= v["range"] + 1 for s in seen)
                 if not enemy_near and v["y"] > ENEMY_TOWER_Y + 0.02:
                     v["y"] -= v["speed"] * dt          # avance vers la tour ennemie
+                v["hp"] -= self._dps_on(v, seen) * dt
+                if v["hp"] <= 0:
+                    continue                           # tuée (estimation) : on l'oublie
             keep.append(v)
             if not seen_real:
                 out.append(Seen(v["name"], False, v["x"], v["y"]))
         self.virtual = keep
         return out
 
+    def _dps_on(self, v: dict, seen: list[Seen]) -> float:
+        """Dégâts/s reçus par une de nos troupes virtuelles : ennemis qui peuvent la viser et l'ont à portée, tours."""
+        dps = 0.0
+        for s in seen:
+            if not s.enemy:
+                continue
+            st = card_info.combat(s.name)
+            if st["buildings_only"] or (v["flying"] and not st["hits_air"]):
+                continue
+            if _tile_dist(s.x, s.y, v["x"], v["y"]) <= st["range"] + 1:
+                dps += st["dps"]
+        alive = self.match.enemy_alive if self.match is not None else {0: True, 1: True}
+        for lane, lx in enumerate(LANES_X):
+            if alive[lane] and _tile_dist(lx, ENEMY_TOWER_Y, v["x"], v["y"]) <= TOWER_RANGE_TILES:
+                dps += TOWER_DPS
+        return dps
+
+    def _fix_sides(self, seen: list[Seen], now: float) -> list[Seen]:
+        """Corrige le camp deviné par le détecteur avec ce que l'IA sait de ses propres coups."""
+        self.own_recent = [r for r in self.own_recent if now - r[3] < 6]
+        own_units = {u for c in DECK.values() for u in c.units}
+        out = []
+        for s in seen:
+            base = s.name.replace("-evolution", "")
+            if s.enemy and s.y > RIVER_Y and any(s.name in names and _tile_dist(s.x, s.y, x, y) < 3
+                                                 for names, x, y, _ in self.own_recent):
+                # NOTRE unité fraîchement posée prise pour une ennemie (ex. notre Géant « ennemi » sur sa case de pose)
+                s = Seen(s.name, False, s.x, s.y, s.vx, s.vy)
+            elif not s.enemy and s.y < RIVER_Y - 0.02 and (
+                    base not in own_units or now - self.own_played.get(base, -1e9) > OWN_UNIT_LIFE_S):
+                # « à nous » chez l'ennemi alors qu'on n'a pas posé cette carte récemment : erreur de camp.
+                # Elle descend vers nous -> ennemie ; sinon on l'ignore (ni alliée fantôme, ni cible de nos sorts)
+                if s.vy / PHONE.th < 0.3:
+                    continue
+                s = Seen(s.name, True, s.x, s.y, s.vx, s.vy)
+            out.append(s)
+        return out
+
     # ---- décision ----
     def decide(self, seen: list[Seen], hand: list[str | None], ready: list[bool], elixir: float,
                now: float) -> Decision | None:
-        # le détecteur prend parfois NOTRE unité fraîchement posée pour une ennemie (ex. notre Géant
-        # « ennemi » sur la case où on vient de le poser) : on la remet dans notre camp
-        self.own_recent = [r for r in self.own_recent if now - r[3] < 6]
-        seen = [Seen(s.name, False, s.x, s.y, s.vx, s.vy)
-                if s.enemy and s.y > RIVER_Y and any(s.name in names and _tile_dist(s.x, s.y, x, y) < 3
-                                                     for names, x, y, _ in self.own_recent) else s
-                for s in seen]
+        """Choisit un coup SANS rien retenir : la boucle appelle played() seulement si la carte est vraiment posée
+        (sinon, pendant le délai entre deux cartes, chaque décision non jouée créait des troupes virtuelles fantômes)."""
+        seen = self._fix_sides(seen, now)
         seen = seen + self._virtual_units(seen, now)
         self._ours = [s for s in seen if not s.enemy]
         d = self._decide(seen, hand, ready, elixir, now)
         if d is None:
             return None
-        if (self.placer and DECK[d.card].kind != "spell" and self.placer.knows(d.card)
-                and not d.reason.startswith("défense : Tonneau") and "[stats" not in d.reason):
+        if self.placer and DECK[d.card].kind != "spell" and self.placer.knows(d.card) and not d.precise:
             units = [(u.name, u.enemy, *PHONE.to_tile(u.x, u.y)) for u in seen]
             # couloir choisi par les règles (côté de l'ennemi : ~80 % d'accord avec les pros), case exacte par le
-            # modèle ; une carte posée au centre par la règle (Canon…) laisse le modèle libre
+            # modèle ; une carte posée au centre par la règle laisse le modèle libre
             rule_lane = _lane(d.x) if abs(d.x - 0.5) > 0.06 else None
             (c, r), _ = self.placer.predict(d.card, units, forbid=_tower_tiles(), lane=rule_lane)
             d.x, d.y = PHONE.center(c, r)
@@ -239,19 +306,34 @@ class Brain:
         if DECK[d.card].kind != "spell":
             # le jeu pose au centre d'une case : on vise ce centre (et on reste hors des tours)
             d.x, d.y = PHONE.snap(*_clamp_own(*PHONE.snap(d.x, d.y)))
-            self.own_recent.append((DECK[d.card].units, d.x, d.y, now))
-            if DECK[d.card].kind == "troop":
-                st = card_info.combat(d.card)
-                for i in range(min(st["count"], 3)):
-                    off = (i - (min(st["count"], 3) - 1) / 2) * 0.6 * PHONE.tw
-                    self.virtual.append({"name": DECK[d.card].units[0] if DECK[d.card].units else d.card,
-                                         "x": d.x + off, "y": d.y, "t": now, "last": now + 1.0,   # déploiement ~1 s
-                                         "speed": (card_info.info(d.card)["speed"] or 1.0) * PHONE.th,
-                                         "range": st["range"], "until": now + 14})
-            if abs(d.x - 0.5) > 0.06:                                  # pas une carte posée au centre
-                self.last_own_play = (_lane(d.x), now)
         d.tile = PHONE.cell(d.x, d.y)
         return d
+
+    def played(self, d: Decision, now: float) -> None:
+        """La carte de `d` est vraiment posée (tap vérifié) : l'IA s'en souvient (camp de ses unités, troupes
+        virtuelles, couloir de sa dernière troupe)."""
+        card = DECK[d.card]
+        for u in card.units:
+            self.own_played[u] = now
+        if card.kind != "spell":
+            self.own_recent.append((card.units, d.x, d.y, now))
+            if abs(d.x - 0.5) > 0.06:                                  # pas une carte posée au centre
+                self.last_own_play = (_lane(d.x), now)
+        if card.kind == "troop":
+            st = card_info.combat(d.card)
+            name = card.units[0] if card.units else d.card
+            for i in range(min(st["count"], 3)):
+                off = (i - (min(st["count"], 3) - 1) / 2) * 0.6 * PHONE.tw
+                self.virtual.append({"name": name, "x": d.x + off, "y": d.y, "t": now, "last": now + 1.0,   # déploiement ~1 s
+                                     "speed": (card_info.info(d.card)["speed"] or 1.0) * PHONE.th,
+                                     "range": st["range"], "until": now + 14, "hp": st["hp"] or 300.0,
+                                     "flying": bool(st["flying"])})
+        if d.card == "giant":
+            self.giant_lane, self.giant_time = _lane(d.x), now
+        if d.reason.startswith("punition"):
+            self.opp_heavy_t = -1e9                                    # une seule punition par carte lourde
+        if d.reason.startswith("défense"):
+            self.last_defense_lane = _lane(d.x)
 
     def _decide(self, seen: list[Seen], hand: list[str | None], ready: list[bool], elixir: float,
                 now: float) -> Decision | None:
@@ -262,7 +344,8 @@ class Brain:
         if barrel and "valkyrie" in playable:
             lane_x = LANES_X[_lane(barrel.x)]
             x, y = _clamp_own(lane_x, OWN_TOWER_Y + 0.06)
-            return Decision("valkyrie", playable["valkyrie"], x, y, "défense : Tonneau à gobelins -> Valkyrie derrière la tour")
+            return Decision("valkyrie", playable["valkyrie"], x, y, "défense : Tonneau à gobelins -> Valkyrie derrière la tour",
+                            precise=True)
         enemies = [e for e in enemies if e.name != "goblin-barrel"]
         threats = [s for s in enemies if s.y > RIVER_Y - self.p['defend_line']]   # sur notre moitié ou au pont
 
@@ -290,10 +373,7 @@ class Brain:
             elif len(threats) == 1 and threats[0].name not in TANK_UNITS and _cost(threats[0].name) <= 2:
                 threats = []
         if threats:
-            d = self._defend(threats, playable)
-            if d:
-                self.last_defense_lane = _lane(d.x)
-            return d
+            return self._defend(threats, playable)
         # Canon posé à l'avance : son tank ou son Cochon descend vers le pont (38 % des Canons des pros)
         coming = [e for e in enemies if (e.name in TANK_UNITS or e.name in FAST_BUILDING_HUNTERS) and e.name not in AIR_UNITS
                   and RIVER_Y - 6 * PHONE.th < e.y <= RIVER_Y and e.vy >= 0]
@@ -301,48 +381,72 @@ class Brain:
             t = max(coming, key=lambda e: e.y)
             row = OWN_FIRST_ROW + (4 if t.name in FAST_BUILDING_HUNTERS else 6 if t.name in SLOW_TANKS else 3)
             x, y = PHONE.center(8 if t.x < 0.5 else 9, row)
-            return Decision("cannon", playable["cannon"], x, y, f"canon à l'avance : {t.name} arrive vers le pont")
+            return Decision("cannon", playable["cannon"], x, y, f"canon à l'avance : {t.name} arrive vers le pont",
+                            precise=True)
         # garder le contre de sa grosse menace (Géant, Cochon…) tant qu'elle peut revenir dans sa main
         keep = set()
         if set(self.opp_hand) & WIN_CONDITIONS:
             keep |= {"cannon", "mini-pekka"}
         if "goblin-barrel" in self.opp_hand:
             keep.add("valkyrie")            # le seul contre propre au Tonneau
-        playable = {c: i for c, i in playable.items() if c not in keep}
-        return self._attack(seen, playable, elixir, now)
+        d = self._attack(seen, {c: i for c, i in playable.items() if c not in keep}, elixir, now)
+        if d is None and keep & set(playable) and elixir >= self._cycle_at(now):
+            # élixir plein et seuls les contres gardés sont jouables : perdre de l'élixir coûte plus cher que de
+            # jouer le contre maintenant (il reviendra en main ; l'élixir perdu, jamais)
+            d = self._attack(seen, playable, elixir, now)
+        return d
+
+    def _cycle_at(self, now: float) -> float:
+        """Élixir à partir duquel on joue plutôt que de perdre de l'élixir. La barre se lit au plus ~9.5 :
+        un seuil à 10 n'était jamais atteint (l'IA restait pleine sans rien faire)."""
+        fast = self.match is not None and self.match.phase(now) != "normal"
+        return min(self.p["cycle_at"], 9.4) - (1.5 if fast else 0)
+
+    def _spell_value(self, card: str, hit: list[tuple[Seen, tuple[float, float]]], center: tuple[float, float]) -> float:
+        """Élixir détruit par le sort : pour chaque unité touchée, ce qu'elle vaut x (part de ses PV enlevée)².
+        Une unité tuée compte entièrement ; des dégâts partiels comptent peu (elle continue de se battre).
+        Ex. Boule de feu sur un Géant seul : ~0.1 élixir pour 4 (25/09 : 57 Boules de feu gâchées sur des tanks seuls)."""
+        dmg = card_info.spell_damage(card)
+        value = 0.0
+        for o, (_, fy) in hit:
+            hp = card_info.combat(o.name)["hp"]
+            part = min(1.0, dmg / hp) if hp else 0.5
+            value += _unit_value(o.name) * part ** 2 * (OUR_SIDE_BONUS if fy > RIVER_Y else 1.0)
+        alive = self.match.enemy_alive if self.match is not None else {0: True, 1: True}
+        r = card_info.spell_radius(card)
+        if any(alive[lane] and _tile_dist(center[0], center[1], lx, ENEMY_TOWER_Y) < r + TOWER_HALF_TILES
+               for lane, lx in enumerate(LANES_X)):
+            value += SPELL_TOWER_VALUE.get(card, 0.0)
+        return value
 
     def _spells(self, enemies: list[Seen], playable: dict) -> Decision | None:
-        for card, min_count, kinds in (("arrows", self.p["arrows_min"], SWARM_UNITS),
-                                       ("fireball", self.p["fireball_min"], None)):
-            if card not in playable:
+        """Sort sur le groupe qui rapporte le plus d'élixir, s'il en rapporte au moins spell_value x son coût."""
+        for card, min_count in (("arrows", self.p["arrows_min"]), ("fireball", self.p["fireball_min"])):
+            if card not in playable or not enemies:
                 continue
-            pool = [e for e in enemies if kinds is None or e.name in kinds]
-            if card == "fireball":
-                pool = [e for e in pool if e.name not in SWARM_UNITS or e.name in ("barbarian", "archer")]
-            r = DECK[card].radius / PHONE.tw          # rayon de regroupement, en cases
-            best, center = 0, None
-            for e in pool:
-                # où sera chaque unité quand le sort tombera sur e ?
-                t = self._impact_time(card, *self._future(e, 0))
-                ex, ey = self._future(e, t)
-                group = [o for o in pool if _tile_dist(*self._future(o, t), ex, ey) < r]
-                c = (sum(self._future(o, t)[0] for o in group) / len(group),
-                     sum(self._future(o, t)[1] for o in group) / len(group))
-                # on recalcule l'impact pour le centre visé et on ne compte que les unités encore DEDANS
-                # (marge de 15 %) : celles qui sortent du cercle en marchant ne comptent pas
-                t = self._impact_time(card, *c)
-                inside = [o for o in group if _tile_dist(*self._future(o, t), *c) < 0.85 * r]
-                if len(inside) > best:
-                    if _hits_enemy_king(card, *c):
-                        continue   # ce groupe est collé au Roi ennemi : on ne l'active pas pour quelques troupes
-                    best, center = len(inside), c
-            if card == "fireball" and best < 2 and self.p.get("fireball_patient") and center and not any(
+            r = card_info.spell_radius(card)                  # rayon réel, en cases
+            t = self._impact_time(card, 0, 0)
+            fut = [self._future(e, t) for e in enemies]        # où sera chaque unité quand le sort tombera
+            best = None                                        # (valeur, nombre touché, centre)
+            for sx, sy in fut:
+                group = [p for p in fut if _tile_dist(*p, sx, sy) < r]
+                c = (sum(p[0] for p in group) / len(group), sum(p[1] for p in group) / len(group))
+                # on ne compte que les unités bien DEDANS au centre visé (marge de 15 % pour l'imprécision)
+                hit = [(e, p) for e, p in zip(enemies, fut) if _tile_dist(*p, *c) < 0.85 * r]
+                if not hit or _hits_enemy_king(card, *c):
+                    continue   # groupe collé au Roi ennemi : on ne l'active pas pour quelques troupes
+                v = self._spell_value(card, hit, c)
+                if best is None or (v, len(hit)) > best[:2]:
+                    best = (v, len(hit), c)
+            if best is None:
+                continue
+            value, n, center = best
+            if card == "fireball" and n < 2 and self.p.get("fireball_patient") and not any(
                     _tile_dist(center[0], center[1], lx, ENEMY_TOWER_Y) < r for lx in LANES_X):
                 continue   # cible seule loin d'une tour : on attend qu'elle s'en approche ou qu'une 2e la rejoigne
-            if best >= min_count and (best >= 2 or card != "fireball" or
-                                      any(e.name in TANK_UNITS or e.name in ("musketeer", "wizard", "witch",
-                                          "executioner", "princess", "dart-goblin") for e in pool)):
-                return Decision(card, playable[card], *center, f"{card} sur un groupe de {best}")
+            if n >= min_count and value >= self.p.get("spell_value", 0.8) * DECK[card].cost:
+                return Decision(card, playable[card], *center,
+                                f"{card} sur un groupe de {n} ({value:.1f} élixir détruits)", precise=True)
         return None
 
     def _future(self, u: Seen, t: float) -> tuple[float, float]:
@@ -392,6 +496,10 @@ class Brain:
         their_dps = sum(f["dps"] * (min(me["count"], 3) if f["splash"] else 1) for f in foes
                         if not f["buildings_only"] and (not me["flying"] or f["hits_air"]))
         t_die = me["hp"] * me["count"] / their_dps if their_dps else 1e9
+        if any(f["buildings_only"] for f in foes):
+            # un Géant ne nous frappe pas : il frappe la TOUR. « Gagner », c'est le tuer avant qu'il ne l'abîme
+            # (sinon n'importe quelle carte « gagne » et la moins chère passait : Archères 17 s au lieu du Mini P.E.K.K.A 10 s)
+            t_die = min(t_die, TANK_DEADLINE_S)
         return t_kill < t_die, t_die - t_kill, t_kill
 
     def _stat_pick(self, t: Seen, threats: list[Seen], playable: dict, push_cost: int) -> Decision | None:
@@ -427,7 +535,7 @@ class Brain:
         x, y = _clamp_own(x, y)
         verdict = f"gagne en ~{t_kill:.0f} s" if not lose else "ralentit seulement"
         return Decision(card, playable[card], x, y,
-                        f"défense : {t.name} x{len(group)} -> {card} [stats : {verdict}, {where}]")
+                        f"défense : {t.name} x{len(group)} -> {card} [stats : {verdict}, {where}]", precise=True)
 
     def _defend(self, threats: list[Seen], playable: dict) -> Decision | None:
         # la menace la plus proche de nos tours (le plus bas à l'écran)
@@ -459,7 +567,7 @@ class Brain:
             else:
                 row, why = OWN_FIRST_ROW + 4, "4 cases sous la rivière"
             x, y = PHONE.center(col, row)
-            return Decision("cannon", playable["cannon"], x, y, f"défense : {t.name} -> canon ({why})")
+            return Decision("cannon", playable["cannon"], x, y, f"défense : {t.name} -> canon ({why})", precise=True)
         # échange d'élixir : parmi les cartes adaptées, ne pas payer plus que l'attaque (+1) si une moins chère suffit
         push_cost = sum(_cost(n) for n in {s.name for s in threats if math.hypot(s.x - t.x, s.y - t.y) < 0.2})
         if self.p.get("stat_defense", True):
@@ -473,7 +581,8 @@ class Brain:
             if t.name in SINGLE_MELEE and c.kind == "troop" and c.targets == "ground" and t.y < OWN_TOWER_Y - 0.04:
                 # mêlée mono-cible : au centre entre les tours, l'ennemi dévie vers le milieu et les deux tours tirent
                 x, y = _clamp_own(0.5 + (-0.04 if lane_x < 0.5 else 0.04), OWN_TOWER_Y - 0.03)
-                return Decision(card, playable[card], x, y, f"défense : {t.name} -> {card} au centre (les 2 tours tirent)")
+                return Decision(card, playable[card], x, y, f"défense : {t.name} -> {card} au centre (les 2 tours tirent)",
+                                precise=True)
             if c.targets == "air+ground" and not c.flying:
                 # tireur : derrière la tour, décalé vers le centre -> la tour et lui tirent ensemble
                 x, y = lane_x + (0.14 if lane_x < 0.5 else -0.14), OWN_TOWER_Y + 0.05
@@ -526,12 +635,12 @@ class Brain:
                 if card in playable:
                     lane = self._weak_lane(seen)
                     x, y = _clamp_own(LANES_X[lane], 0.47)
-                    self.opp_heavy_t = -1e9
-                    return Decision(card, playable[card], x, y, f"punition : carte lourde en face -> {card} au pont opposé")
+                    return Decision(card, playable[card], x, y, f"punition : carte lourde en face -> {card} au pont opposé",
+                                    precise=True)
         # la barre d'élixir se lit au plus ~9.5 : un seuil à 10 ne serait jamais atteint ; et à élixir plein le
         # Géant passe avant la carte qu'on ferait « tourner » (match du 27/09 : Géant jamais joué)
         giant_at = min(self.p["giant_elixir"], 9) - (1 if fast else 0)
-        if elixir >= self.p["cycle_at"] - (1.5 if fast else 0):
+        if elixir >= self._cycle_at(now):
             giant_at = min(giant_at, elixir)
         # ses contres au Géant connus et tous hors de sa main (joués récemment) : fenêtre pour lancer plus tôt
         known = set(self.opp_deck) & GIANT_COUNTERS
@@ -540,7 +649,6 @@ class Brain:
         if "giant" in playable and (elixir >= giant_at or punish):
             lane = self._attack_lane(seen, now if self.p["counter_push"] else None)
             tower_down = self.match is not None and not all(self.match.enemy_alive.values())
-            self.giant_lane, self.giant_time = lane, now
             spot = self.p["giant_spot"]
             if spot == "back" and set(self.opp_deck) & PULL_BUILDINGS:
                 spot = "corner"     # son bâtiment ne pourra pas tirer le Géant vers le centre depuis le coin
@@ -557,6 +665,7 @@ class Brain:
                  "mid": "au milieu", "bridge": "au pont", "king": "derrière le Roi"}.get(spot, spot)
             if punish and elixir < giant_at:
                 x, y = _clamp_own(LANES_X[lane], 0.47)   # pression immédiate au pont
+                return Decision("giant", playable["giant"], x, y, f"attaque : Géant ({why}) au pont", precise=True)
             return Decision("giant", playable["giant"], x, y, f"attaque : Géant ({why})")
         # soutien derrière notre Géant pendant qu'il avance
         ours = [s for s in seen if not s.enemy and s.name == "giant"]
@@ -570,14 +679,14 @@ class Brain:
                 if card in playable:
                     x, y = _clamp_own(g.x, g.y + 0.07)       # ~4 cases derrière : hors d'une Boule de feu sur le Géant
                     return Decision(card, playable[card], x, y, f"soutien : {card} derrière le Géant")
-        if elixir >= self.p["cycle_at"] - (1.5 if fast else 0) and playable:
+        if elixir >= self._cycle_at(now) and playable:
             # élixir plein et rien à faire : on fait tourner la carte la moins chère, sans risque
             card = min((c for c in playable if DECK[c].kind == "troop"), key=lambda c: DECK[c].cost, default=None)
             if card == "archers":
                 # au centre juste devant le Roi : les deux archères partent chacune dans un couloir,
                 # une seule Flèche ne peut plus les prendre ensemble
                 x, y = _clamp_own(0.5, OWN_TOWER_Y + 0.0)
-                return Decision(card, playable[card], x, y, "rien à faire : archères séparées au centre")
+                return Decision(card, playable[card], x, y, "rien à faire : archères séparées au centre", precise=True)
             if card in ("mini-pekka", "knight", "valkyrie"):
                 # les pros les jouent dans un couloir, rangées 19-25 (vidéos), jamais derrière le Roi
                 lane = self._attack_lane(seen, now)
