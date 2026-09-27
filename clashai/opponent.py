@@ -155,6 +155,9 @@ class Opponent:
             if any(c == card and abs(x - u.center[0]) < 0.19 * frame_h / 2.2 and abs(y - u.center[1]) < 0.06 * frame_h
                    for _, c, x, y in self._memory):
                 continue
+            # même carte comptée il y a moins de 1,5 s (Cochons royaux posés sur 2 couloirs, groupe de Gobelins) : une seule carte
+            if now - self.recent.get(card, (-1e9, 0))[0] < 1.5 or any(c == card and now - t0 < 1.5 for c, t0 in self.pending.values()):
+                continue
             if u.center[1] < 0.43 * frame_h:
                 self.pending[tid] = (card, now)
         self._memory = [m for m in self._memory if now - m[0] <= 3.0] +             [(now, UNIT2CARD[u.name][0], u.center[0], u.center[1]) for u in units if u.name in UNIT2CARD and u.enemy]
