@@ -383,6 +383,8 @@ class Brain:
         enemies = [s for s in seen if s.enemy]
         # Tonneau à gobelins en vol : Valkyrie juste derrière la tour visée, elle balaie les 3 gobelins à l'atterrissage
         barrel = next((e for e in enemies if e.name == "goblin-barrel"), None)
+        if barrel and len(self.opp_deck) >= 6 and "goblin-barrel" not in self.opp_deck:
+            barrel = None       # deck presque connu, sans Tonneau : fausse détection (27/09 : 2 Valkyries gâchées)
         if barrel and "valkyrie" in playable:
             lane_x = LANES_X[_lane(barrel.x)]
             x, y = _clamp_own(lane_x, OWN_TOWER_Y + 0.06)
