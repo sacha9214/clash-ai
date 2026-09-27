@@ -82,8 +82,15 @@ Colle ce fichier à Claude Code pour reprendre.
 12. Vérifier qu'une donnée existe VRAIMENT avant de bâtir dessus : la classe « tower-bar » vient de KataCR, notre YOLO
     ne l'a pas (entraîné sans l'interface) -> une lecture basée dessus n'aurait jamais marché en match, alors que
     les tests (fausses boîtes) passaient. Lister les classes du modèle (`YOLO(...).names`).
+13. Un test ne doit dépendre d'aucun chemin propre à une machine : le test « vrais matchs » visait un dossier du
+    conteneur -> toujours sauté ailleurs (CI comprise). Il extrait maintenant learning/games_logs.tgz.
 11. Un bilan d'échanges doit créditer chaque attaque adverse UNE fois : chaque carte posée contre le même Géant
     « gagnait » 5 élixir (+371 fictifs sur 52 matchs).
+- Après une session de matchs : `python scripts/match_report.py` -> `runs/report.html` (victoires, élixir des deux camps
+  par match, décisions, ce que le bandit a appris). Pour les prochaines améliorations (chrono, détection, imitation) :
+  `python scripts/pack_samples.py` puis les commandes git qu'il affiche (captures + coups des vidéos -> learning/samples).
+- Fin de match par couronnes (`endgame`), sort qui achève une tour (`finish_towers`, lecture des PV auto-calibrée),
+  contre-attaque derrière nos survivants (`counter_support`) ; CI GitHub : tests à chaque PR.
 - Avance d'élixir (`edge_push`, bandit) : Géant plus tôt avec 3+ d'avance, pas d'attaque avec 3+ de retard.
   Bilan des échanges estimé : à l'écran, dans `decisions.jsonl` (`trade`, `opp_elixir`) et `journal.jsonl`
   (`trade_balance`) -> comparer bilan et victoires quand il y aura des matchs.
