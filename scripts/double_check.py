@@ -50,11 +50,16 @@ def iou(a, b) -> float:
     return inter / ((a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter + 1e-9)
 
 
+from clashai.detect_yolo import DECOR_Y  # noqa: E402
+
+
 def preds(model, crop, imgsz):
     r = model.predict(crop, imgsz=imgsz, conf=CONF_CONFLICT, verbose=False, device=0)[0]
     out = []
     for box, c, conf in zip(r.boxes.xyxy.tolist(), r.boxes.cls.tolist(), r.boxes.conf.tolist()):
         name, side = r.names[int(c)].rsplit("_", 1)
+        if (box[1] + box[3]) / 2 < DECOR_Y and "tower" not in name:
+            continue                              # décor au-dessus du Roi ennemi (comme en jeu)
         out.append((name, int(side), conf, box))
     return out
 
@@ -109,13 +114,13 @@ def process(game: str, det_a, det_b, names_v2: dict) -> tuple[int, int]:
                     used.add(j)
                 continue
             if j is None or min(conf, pb[j][2]) < CONF_KEEP:
-                good = False; WHY['un seul modèle'] = WHY.get('un seul modèle', 0) + 1
+                good = False; WHY['seul:' + name] = WHY.get('seul:' + name, 0) + 1
                 break
             used.add(j)
             color = team_color(crop, tuple(int(v) for v in box))
             sides = {side, pb[j][1]} | ({1 if color > 0 else 0} if color else set())
             if len(sides) != 1:
-                good = False; WHY['camp'] = WHY.get('camp', 0) + 1
+                good = False; WHY['camp:' + name] = WHY.get('camp:' + name, 0) + 1
                 break
             if name not in (enemy_ok if side == 1 else own_ok):
                 good = False; WHY['hors deck'] = WHY.get('hors deck', 0) + 1

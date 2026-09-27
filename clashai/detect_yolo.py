@@ -31,6 +31,7 @@ WEIGHTS = ROOT / "models/yolo/clashai_yolo11s.engine"      # repli : le .pt à c
 # Recadrage de l'arène dans l'écran (fractions x0, y0, largeur, hauteur), comme pour KataCR
 ARENA = (0.020, 0.035, 0.960, 0.684)
 ARENA_SIZE = (568, 896)
+DECOR_Y = 45                    # px de l'arène recadrée : au-dessus, décor seulement (cristaux pris pour une Tesla)
 IMGSZ = 896                     # remplacé par models/yolo/clashai_yolo11s.json si le modèle adopté en demande une autre
 UI = {"bar", "bar-level", "tower-bar", "king-tower-bar", "dagger-duchess-tower-bar", "skeleton-king-bar", "elixir",
       "clock", "emote", "evolution-symbol", "ice-spirit-evolution-symbol", "text", "selected"}
@@ -119,6 +120,8 @@ class Detector:
             name, _, side = r.names[c].rpartition("_")
             if name in UI or name.startswith("padding") or (self.track and conf < 0.2):
                 continue
+            if (y0 + y1) / 2 < DECOR_Y and "tower" not in name:
+                continue        # bande du décor au-dessus du Roi ennemi : aucune troupe n'y va (Arène 4 : « Tesla »)
             box = (int(ox + x0 * sx), int(oy + y0 * sy), int(ox + x1 * sx), int(oy + y1 * sy))
             enemy = side == "1"
             color = team_color(crop, (int(x0), int(y0), int(x1), int(y1))) if "tower" not in name else 0
