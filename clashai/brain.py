@@ -393,7 +393,8 @@ class Brain:
                             precise=True, trade=self._trade("valkyrie", gobs, True, _cost("goblin-barrel")),
                             push=_cost("goblin-barrel"))
         enemies = [e for e in enemies if e.name != "goblin-barrel"]
-        threats = [s for s in enemies if s.y > RIVER_Y - self.p['defend_line']]   # sur notre moitié ou au pont
+        threats = [s for s in enemies if s.y > RIVER_Y - self.p['defend_line']   # sur notre moitié ou au pont
+                   and s.name not in SPAWNERS]      # ses bâtiments ne viennent pas : ce qui en sort sera défendu
 
         d = self._finish_tower(playable)
         if d:

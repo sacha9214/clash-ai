@@ -424,3 +424,9 @@ def test_our_fresh_minions_misread_as_enemy_are_ours():
     d = b.decide([enemy("minion", 4, 19), enemy("minion", 5, 19)], ["knight", "valkyrie", "cannon", "fireball"],
                  ALL, 8.0, 100.0)
     assert d is None or not d.reason.startswith("défense : minion")
+
+
+def test_no_defense_against_his_buildings():
+    b = brain()
+    d = b.decide([enemy("goblin-cage", 4, 14)], ["minions", "knight", "cannon", "musketeer"], ALL, 6.0, 100.0)
+    assert d is None or not d.reason.startswith("défense : goblin-cage")
