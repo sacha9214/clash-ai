@@ -101,8 +101,8 @@ def finetune(minutes: float) -> None:
     yaml.safe_dump(d, open(FT / "data.yaml", "w"), sort_keys=False)
     shutil.rmtree(ROOT / "runs/detector/dc_ft", ignore_errors=True)
     subprocess.run([PY, "scripts/train_yolo.py", "--model", str(MODELS / "clashai_yolo11s.pt"), "--data", str(FT / "data.yaml"),
-                    "--hours", str(minutes / 60), "--lr0", "0.002", "--close-mosaic", "0", "--workers", "8",
-                    "--name", "dc_ft", "--imgsz", str(imgsz), "--batch", "12"], cwd=ROOT, env=ENV)
+                    "--hours", str(minutes / 60), "--lr0", "0.002", "--close-mosaic", "0", "--workers", "4",
+                    "--name", "dc_ft", "--imgsz", str(imgsz), "--batch", "8"], cwd=ROOT, env=ENV)
     best = ROOT / "runs/detector/dc_ft/weights/best.pt"
     if not best.exists():
         print("[scanner] réglage fin sans résultat", flush=True)
@@ -134,31 +134,40 @@ def finetune(minutes: float) -> None:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--games", type=int, default=20)
+    ap.add_argument("--games", type=int, default=0, help="0 = sans fin")
     ap.add_argument("--every", type=int, default=4)
     ap.add_argument("--minutes", type=float, default=20)
     ap.add_argument("--no-show", action="store_true")
     a = ap.parse_args()
-    labeler = None
-    for g in range(1, a.games + 1):
+    import threading
+    labeler, trainer = None, None
+    g = 0
+    while a.games == 0 or g < a.games:
+        g += 1
         if labeler is None or labeler.poll() is not None:
             # relit en parallèle les matchs pas encore traités pendant qu'on joue le suivant
             labeler = subprocess.Popen([PY, "scripts/double_check.py"], cwd=ROOT, env=ENV,
                                        creationflags=getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0))
-        print(f"=== match {g}/{a.games} ===", flush=True)
+        print(f"=== match {g}/{a.games or '∞'} ===", flush=True)
         r = subprocess.run([PY, "scripts/autoplay.py", "--games", "1"] + ([] if a.no_show else ["--show"]),
                            cwd=ROOT, env=ENV)
         subprocess.run([PY_LIGHT, "scripts/review_game.py"], cwd=ROOT, env=ENV)
         if r.returncode != 0:
             print("autoplay en échec : arrêt (téléphone débranché ?)", flush=True)
             break
-        if g % a.every == 0:
-            labeler.wait()
-            subprocess.run([PY, "scripts/double_check.py"], cwd=ROOT, env=ENV)
-            subprocess.run([PY, "scripts/own_labels.py"], cwd=ROOT, env=ENV)   # test « nos troupes » à jour
-            finetune(a.minutes)
+        if g % a.every == 0 and (trainer is None or not trainer.is_alive()):
+            # réglage fin EN PARALLÈLE des matchs (le téléphone ne reste jamais sans jouer) ; le nouveau scanner,
+            # s'il est adopté, est chargé au match suivant
+            def job():
+                subprocess.run([PY, "scripts/double_check.py"], cwd=ROOT, env=ENV)
+                subprocess.run([PY, "scripts/own_labels.py"], cwd=ROOT, env=ENV)   # test « nos troupes » à jour
+                finetune(a.minutes)
+            trainer = threading.Thread(target=job, daemon=False)
+            trainer.start()
     if labeler:
         labeler.wait()
+    if trainer:
+        trainer.join()
 
 
 if __name__ == "__main__":
