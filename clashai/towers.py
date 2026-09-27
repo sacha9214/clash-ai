@@ -18,6 +18,10 @@ import numpy as np
 # Barres de PV de nos tours princesses (fractions de l'écran) : début, fin, rangée
 OUR_BARS = {0: (0.168, 0.285, 0.592), 1: (0.756, 0.874, 0.592)}
 DOUBLE_ELIXIR_S, OVERTIME_S = 120.0, 180.0
+# tours princesses et leurs variantes (troupes de tour) : sinon, contre un Canonnier, les deux tours ennemies
+# passaient pour détruites au bout de 3 s
+PRINCESS_TOWERS = {"queen-tower", "cannoneer-tower", "dagger-duchess-tower"}
+DESTROYED_AFTER_S = 6.0      # barre basse puis illisible aussi longtemps : la tour est tombée
 
 
 def bar_fraction(img: np.ndarray, x0f: float, x1f: float, yf: float) -> float | None:
@@ -41,17 +45,22 @@ class MatchState:
     _hp_hist: dict = field(default_factory=lambda: {0: collections.deque(maxlen=5), 1: collections.deque(maxlen=5)})
     enemy_alive: dict = field(default_factory=lambda: {0: True, 1: True})   # tours princesses ennemies
     _enemy_seen: dict = field(default_factory=lambda: {0: time.time(), 1: time.time()})
+    _bar_seen: dict = field(default_factory=lambda: {0: None, 1: None})   # dernier instant où la barre a été lue
 
     def update(self, img: np.ndarray, units, now: float | None = None) -> None:
         now = time.time() if now is None else now
         for lane, (x0, x1, y) in OUR_BARS.items():
             f = bar_fraction(img, x0, x1, y)
             if f is not None:
+                self._bar_seen[lane] = now
                 self._hp_hist[lane].append(f)
                 self.our_hp[lane] = float(np.median(self._hp_hist[lane]))   # médiane : robuste aux passages devant
+            elif (self._bar_seen[lane] is not None and self.our_hp[lane] < 0.3
+                  and now - self._bar_seen[lane] > DESTROYED_AFTER_S):
+                self.our_hp[lane] = 0.0          # tour détruite : sa barre a disparu (avant : restait à sa dernière valeur)
         h, w = img.shape[:2]
         for u in units:
-            if u.name == "queen-tower" and u.center[1] < 0.4 * h:
+            if u.name in PRINCESS_TOWERS and u.center[1] < 0.4 * h:
                 self._enemy_seen[0 if u.center[0] < w / 2 else 1] = now
         for lane in (0, 1):
             self.enemy_alive[lane] = now - self._enemy_seen[lane] < 3.0

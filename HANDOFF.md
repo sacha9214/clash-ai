@@ -42,6 +42,42 @@ Colle ce fichier à Claude Code pour reprendre.
   et petits modèles sur GitHub après chaque étape.
 - Pas de téléphone le 26/09 : aucun match ; tout reste à valider en match ensuite.
 
+## 27/09 : grande revue (sans téléphone : tout est validé par tests et par rejeu des 52 matchs, PAS en match)
+- Tests : `python -m pytest -q tests` (cerveau, adversaire, bandit, détecteurs, boucle ; tout hors téléphone).
+  Rejeu des décisions enregistrées avec le cerveau actuel : `python scripts/replay_logs.py --games <runs/games>`.
+- Cerveau :
+  - Sorts jugés sur l'élixir détruit (`spell_value`), jamais sur le Roi ennemi.
+  - Mini P.E.K.K.A (pas les Archères) contre un Géant.
+  - Placements précis (`Decision.precise`) jamais déplacés par le modèle.
+  - `Brain.played()` n'est appelé qu'après un tap vérifié.
+  - Troupes virtuelles mortelles, camps corrigés, élixir jamais perdu à 10.
+- Stats des cartes ramenées au même niveau (rareté). Vitesse des unités horodatée (`clashai/motion.py`).
+- Bandit factorisé (`strategy.param_table()` pour voir ce qu'il a appris). Anciens matchs = fonctions absentes (`LEGACY`).
+- Boucle et autoplay :
+  - Flux coupé -> arrêt propre (`StreamLost`).
+  - Égalités lues « nul » ; combats pris en cours non comptés ; résultat lu seulement sur l'écran de fin.
+  - Tours Canonnier/Duchesse reconnues.
+- À valider en match d'abord : les sorts (seuil 0.8 x coût), le camp corrigé des unités, le modèle adverse.
+
+### Leçons (erreurs trouvées, à ne pas refaire)
+1. Un paramètre du bandit peut cacher un comportement nuisible : `fireball_min=1` (36 matchs sur 52) lançait la Boule
+   de feu sur un Géant seul dès qu'un tireur existait AILLEURS sur le terrain. Vérifier ce que fait chaque variante
+   dans les journaux (`decisions.jsonl`), pas seulement son taux de victoire.
+2. Un seuil lu sur l'écran doit être atteignable : l'élixir se lit au plus ~9.5 -> `giant_elixir` 10 puis `cycle_at` 10
+   n'arrivaient jamais. Toujours comparer un seuil au maximum réellement mesuré.
+3. Les valeurs « niveau 1 » des fichiers du jeu sont au 1er niveau de CHAQUE rareté (rare = niveau 3, épique = 6) :
+   comparer des cartes demande de les ramener au même niveau.
+4. Une fonction de décision ne doit rien retenir : la boucle redécide à chaque image et ne joue qu'une décision sur
+   plusieurs (délai entre deux cartes). Mémoriser seulement ce qui est vraiment joué.
+5. Contre une unité qui ne vise que les bâtiments, « gagner le duel » est trivial : le vrai critère est le temps
+   avant qu'elle n'abîme la tour.
+6. Vitesse = positions HORODATÉES : le détecteur tourne aussi sur les rafales d'images pendant la pose d'une carte.
+7. Comparer des proportions de zones de tailles différentes fausse la comparaison (couronnes : égalités -> « victoire »).
+8. Un test doit d'abord ÉCHOUER sur l'ancien code : un test de tours avec une horloge factice (0-9 s) passait sur le
+   code bogué, parce que l'état initial utilise l'horloge réelle.
+9. Tout filtre « crédible / pas crédible » peut aveugler le cerveau (unités invoquées, évolutions, deck verrouillé
+   par des fantômes) : ne cacher une unité que si c'est vérifiable.
+
 ## Nuit du 25 au 26/09 (autonome, hors de Claude)
 - `scripts/night_detector.py` (PID 39148) : YOLO11s, 64 199 images (60 000 synthétiques + 4 199 réelles), 8 h max,
   puis note sur le test (séquences jamais vues ; KataCR : F1 0.916), export TensorRT et rapport

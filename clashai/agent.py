@@ -42,7 +42,16 @@ def _save(path: str, img) -> None:
     _jobs.put((path, img))
 
 
+COSTS = {card: cost for card, cost, _ in UNIT2CARD.values()}
+
+
+class StreamLost(RuntimeError):
+    """Le flux vidéo ne donne plus d'image : téléphone débranché ou serveur scrcpy arrêté."""
+
+
 class Agent:
+    STALL_S = 5.0          # plus aucune nouvelle image depuis ce délai : le flux est mort
+
     def __init__(self, out: str = "runs/games", show: bool = False):
         self.show = show
         self.det, self.brain, self.out = Detector(track=True), Brain(), out
@@ -65,17 +74,12 @@ class Agent:
         seen = Brain.to_seen(units, w, h, self.det.trails, fps)
         hand = H.read_hand(img, min_score=0.45)
         ready = [B.card_ready(img, s) for s in range(4)]
-        self._learn_new_card(img, hand, ready)
-        hand = H.read_hand(img, min_score=0.45)
+        if self._learn_new_card(img, hand, ready):
+            hand = H.read_hand(img, min_score=0.45)
         el = B.read_elixir(img)
-        new = self.opp.update(raw, now, img.shape[0])
-        for c in new:
-            self.opp_log.append({"t": round(now, 2), "card": c, "elixir_after": round(self.opp.elixir, 1)})
+        self._opp_update(raw, now, img.shape[0])
         self.brain.opp_elixir = self.opp.elixir
         self.brain.opp_hand, self.brain.opp_deck = self.opp.hand, self.opp.deck
-        costs = {card: cost for card, cost, _ in UNIT2CARD.values()}
-        if any(costs.get(c, 0) >= 6 for c in new):
-            self.brain.opp_heavy_t = now
         d = self.brain.decide(seen, hand, ready, el, now)
         info = [f"elixir {el:.1f}  main : " + ", ".join(c or "?" for c in hand), self.match.summary()]
         return units, d, info, hand, el
@@ -102,13 +106,21 @@ class Agent:
                     self.spells_pending.remove(sp)
                     break
 
+    def _opp_update(self, units, now, frame_h):
+        """Modèle de l'adversaire : cartes posées (journal) et carte lourde (punition), même pendant une pose."""
+        new = self.opp.update(units, now, frame_h)
+        for c in new:
+            self.opp_log.append({"t": round(now, 2), "card": c, "elixir_after": round(self.opp.elixir, 1)})
+        if any(COSTS.get(c, 0) >= 6 for c in new):
+            self.brain.opp_heavy_t = now
+
     def _observe(self, img, info):
         """Pendant qu'une carte se pose : on continue de suivre les unités et d'afficher (pas de décision)."""
         now = time.time()
         units = self.det(img)
         self._watch_spells(units, img, now)
-        for c in self.opp.update(units, now, img.shape[0]):
-            self.opp_log.append({"t": round(now, 2), "card": c, "elixir_after": round(self.opp.elixir, 1)})
+        self.match.update(img, units, now)
+        self._opp_update(units, now, img.shape[0])
         self._show(img, units, None, info)
 
     def _learn_new_card(self, img, hand, ready):
@@ -117,8 +129,9 @@ class Agent:
         from clashai.cards import DECK
         missing = [c for c in DECK if c not in H.known_cards()]
         if len(missing) != 1:
-            return
+            return False
         streak = getattr(self, "_unknown_streak", {})
+        learned = False
         for slot in range(4):
             crop = H.card_crop(img, slot)
             name, score = H.identify(crop)
@@ -128,10 +141,12 @@ class Agent:
                     H.learn(crop, missing[0])
                     print(f"   carte apprise : {missing[0]} (score {score:.2f})", flush=True)
                     streak.clear()
+                    learned = True
                     break
             else:
                 streak[slot] = 0
         self._unknown_streak = streak
+        return learned
 
     def _draw_opponent(self, v):
         from clashai.opponent import UNIT2CARD
@@ -197,8 +212,17 @@ class Agent:
         os.makedirs(folder, exist_ok=True)
         self.det.tracker.reset() if self.det.tracker is not None else None
         log, last_play, gone, t_prev, n, refused = [], 0.0, None, time.time(), 0, 0
+        last_n, t_new = -1, time.time()
         while True:
-            img, t_recv, _ = dev.frame()
+            # une image NOUVELLE à chaque tour : sans ça, un flux figé ou coupé faisait tourner la boucle à 100 %
+            # sur la même image, sans jamais finir le combat (et le suivi recevait des images en double)
+            dev.wait_frame(timeout=0.5, after=last_n)
+            img, t_recv, frame_n = dev.frame()
+            if img is None or frame_n == last_n:
+                if not getattr(dev, "alive", True) or time.time() - t_new > self.STALL_S:
+                    raise StreamLost(f"plus d'image du téléphone depuis {time.time() - t_new:.0f} s")
+                continue
+            last_n, t_new = frame_n, time.time()
             t_loop = time.perf_counter()
             if not B.in_battle(img):
                 gone = gone or time.time()
@@ -234,7 +258,8 @@ class Agent:
                 play_ms = round((time.perf_counter() - t_play) * 1000)
                 if ok and d.card in ("arrows", "fireball"):
                     self.opp.note_our_spell(time.time(), d.x * w, d.y * h)
-                    self.spells_pending.append({"card": d.card, "x": d.x, "y": d.y, "t_tap": time.time()})
+                    # vol mesuré depuis la DÉCISION : c'est ce délai que brain.SPELL_IMPACT_S doit prévoir
+                    self.spells_pending.append({"card": d.card, "x": d.x, "y": d.y, "t_tap": now})
                 log.append({"t": round(now, 2), "card": d.card, "x": round(d.x, 3), "y": round(d.y, 3), "tile": d.tile,
                             "reason": d.reason, "ok": ok, "play_ms": play_ms, "elixir": el, "hand": hand,
                             "units": [(u.name, u.enemy, u.center) for u in units]})
@@ -260,7 +285,7 @@ class Agent:
         card = np.zeros((170, 578, 3), np.uint8)
         lines = [f"Deck adverse ({len(self.opp.deck)}/8 vues) :", ", ".join(self.opp.deck[:4]),
                  ", ".join(self.opp.deck[4:8]), f"Cartes jouees : {len(self.opp.played)}   elixir depense ~" +
-                 str(sum(next(v[1] for v in UNIT2CARD.values() if v[0] == c) for c in self.opp.played))]
+                 str(sum(COSTS.get(c, 0) for c in self.opp.played))]
         for i, line in enumerate(lines):
             cv2.putText(card, _ascii(line), (10, 32 + 38 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.62, (255, 255, 255), 1, cv2.LINE_AA)
         cv2.imwrite(os.path.join(folder, "opponent_summary.jpg"), card)

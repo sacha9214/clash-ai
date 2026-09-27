@@ -35,7 +35,7 @@ def _find_tool(env: str, names: tuple[str, ...], globs: tuple[str, ...]) -> str:
         hits = sorted(glob.glob(os.path.expandvars(os.path.expanduser(g))))
         if hits:
             return hits[-1]
-    return names[0]
+    return names[0] if names else ""        # introuvable : Device.start() le dira clairement (pas d'erreur à l'import)
 
 
 _WINGET_SCRCPY = r"%LOCALAPPDATA%\Microsoft\WinGet\Packages\Genymobile.scrcpy_*\scrcpy-win64-v*"
@@ -97,6 +97,8 @@ class Device:
 
     # ---------- démarrage ----------
     def start(self) -> "Device":
+        if not SERVER_LOCAL or not os.path.exists(SERVER_LOCAL):
+            raise RuntimeError("scrcpy-server introuvable : installer scrcpy ou définir SCRCPY_SERVER_PATH")
         _adb(self.serial, "push", SERVER_LOCAL, SERVER_REMOTE, check=True)
         name = f"localabstract:scrcpy_{self.scid:08x}"
         _adb(self.serial, "forward", f"tcp:{self.port}", name, check=True)
@@ -176,6 +178,11 @@ class Device:
             target = (after if after is not None else self.frame_count if self._frame is not None else -1)
             return self._new_frame.wait_for(lambda: self._frame is not None and self.frame_count > target,
                                             timeout=timeout)
+
+    @property
+    def alive(self) -> bool:
+        """Faux dès que le flux vidéo est coupé (téléphone débranché, serveur scrcpy arrêté)."""
+        return self._running
 
     def frame(self) -> tuple[np.ndarray, float, int]:
         """(image BGR, instant de réception, numéro) — sans copie."""
