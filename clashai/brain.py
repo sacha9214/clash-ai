@@ -414,6 +414,10 @@ class Brain:
         lose, pricey, _, neg_margin, cost, card, t_kill = options[0]
         if lose and pricey:
             return None                                     # rien ne gagne à bon prix : la tour encaisse
+        if lose and not near_tower and t.name not in TANK_UNITS:
+            # personne ne gagne seul au pont : on attend qu'ils entrent dans la portée de notre tour, puis on défend
+            # à côté d'elle (tour + unité ensemble) — au lieu de perdre l'unité et l'élixir loin de la tour
+            return None
         me = card_info.combat(card)
         their_range = max(card_info.combat(g.name)["range"] for g in group)
         if me["range"] >= 4 and their_range < me["range"] - 1:
@@ -421,6 +425,11 @@ class Brain:
             gap = min(me["range"] - 0.8, their_range + 2.5)
             x, y = t.x, t.y + gap * PHONE.th
             where = f"à {gap:.1f} cases (sa portée {their_range:.1f}, la nôtre {me['range']:.1f})"
+        elif lose:
+            # combat difficile : devant notre tour, pour que tour et unité frappent ensemble
+            lane_x = LANES_X[_lane(t.x)]
+            x, y = lane_x + (0.06 if lane_x < 0.5 else -0.06), OWN_TOWER_Y - 0.05
+            where = "devant notre tour (tour + unité)"
         else:
             x, y = t.x + t.vx * 0.5, t.y + 0.05
             where = "au contact"
