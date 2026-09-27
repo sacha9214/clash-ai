@@ -60,6 +60,8 @@ class Detector:
         # mémoire courte : une unité suivie qui disparaît moins de COAST_S secondes (petite unité ratée sur une
         # image, masquée par un effet) est gardée à sa position prévue au lieu de « clignoter »
         self.memory: dict[int, tuple[Unit, float, float, float]] = {}   # suivi -> (unité, instant, vx, vy en px/s)
+        self.seen_count: dict[int, int] = {}      # suivi -> nombre d'images où il a été vu
+        self.confirmed: set[int] = set()          # suivis confirmés (plus une ombre)
         self._fresh = True
         self.tracker = self                      # interface de detect_katacr : det.tracker.reset()
         self.on_arena(np.zeros((ARENA_SIZE[1], ARENA_SIZE[0], 3), np.uint8))   # chauffe (TensorRT)
@@ -71,6 +73,8 @@ class Detector:
         self.trails.clear()
         self.side_votes.clear()
         self.memory.clear()
+        self.seen_count.clear()
+        self.confirmed.clear()
 
     def _crop(self, frame: np.ndarray) -> tuple[np.ndarray, tuple[float, float, float, float]]:
         h, w = frame.shape[:2]
@@ -97,7 +101,7 @@ class Detector:
         units = []
         for (x0, y0, x1, y1), c, conf, tid in zip(b.xyxy.tolist(), b.cls.int().tolist(), b.conf.tolist(), ids):
             name, _, side = r.names[c].rpartition("_")
-            if name in UI or name.startswith("padding") or (self.track and conf < 0.35):
+            if name in UI or name.startswith("padding") or (self.track and conf < 0.2):
                 continue
             box = (int(ox + x0 * sx), int(oy + y0 * sy), int(ox + x1 * sx), int(oy + y1 * sy))
             enemy = side == "1"
@@ -109,11 +113,31 @@ class Detector:
                 enemy = sum(v) > 0                              # …puis figé pour toute sa vie
             units.append(Unit(int(tid), name, enemy, float(conf), box))
         if self.track:
-            units = self._coast(units)
+            units = self._coast(self._confirm(units))
         self._update_trails([u for u in units if not u.coasted])
         return units
 
-    COAST_S = 0.4
+    COAST_S = 0.8
+    CONFIRM_CONF = 0.6          # une unité NOUVELLE doit être sûre (>= 60 %)…
+    CONFIRM_FRAMES = 2          # …ou vue sur 2 images de suite : une ombre ou un effet ne passe pas
+
+    def _confirm(self, units: list[Unit]) -> list[Unit]:
+        """Ombres, effets de sorts, reflets : détections faibles et fugaces. Une unité n'est utilisée que si elle est
+        sûre, ou confirmée sur plusieurs images ; une fois confirmée, on la garde même si sa confiance baisse
+        (petite unité dans une mêlée) : on perd moins d'unités réelles."""
+        out = []
+        for u in units:
+            if u.track_id < 0 or "tower" in u.name:
+                out.append(u)
+                continue
+            n = self.seen_count.get(u.track_id, 0) + 1
+            self.seen_count[u.track_id] = n
+            if u.track_id in self.confirmed or u.conf >= self.CONFIRM_CONF or (n >= self.CONFIRM_FRAMES and u.conf >= 0.35):
+                self.confirmed.add(u.track_id)
+                out.append(u)
+        if len(self.seen_count) > 2000:
+            self.seen_count.clear()
+        return out
 
     def _coast(self, units: list[Unit]) -> list[Unit]:
         now = time.perf_counter()
