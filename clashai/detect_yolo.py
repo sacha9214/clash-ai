@@ -19,7 +19,12 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
+from clashai.cards import DECK
+from clashai.identity import TrackIdentity
 from clashai.motion import Tracks
+
+# nos unités possibles (deck exact + évolutions) : une unité à nous ne peut pas porter un autre nom
+OWN_NAMES = {u for c in DECK.values() for u in c.units} | {u + "-evolution" for c in DECK.values() for u in c.units}
 
 ROOT = Path(__file__).resolve().parents[1]
 WEIGHTS = ROOT / "models/yolo/clashai_yolo11s.engine"      # repli : le .pt à côté si TensorRT est absent
@@ -65,7 +70,8 @@ class Detector:
         # mémoire courte : une unité suivie qui disparaît moins de COAST_S secondes (petite unité ratée sur une
         # image, masquée par un effet) est gardée à sa position prévue au lieu de « clignoter »
         self.memory: dict[int, tuple[Unit, float]] = {}   # suivi -> (dernière unité vue, avec sa vitesse ; instant)
-        self.motion = Tracks()                    # suivi -> vitesse mesurée sur ses positions horodatées
+        self.motion = Tracks()
+        self.ident: dict[int, TrackIdentity] = {}   # suivi -> camp et nom votés sur toute sa vie                    # suivi -> vitesse mesurée sur ses positions horodatées
         self.seen_count: dict[int, int] = {}      # suivi -> nombre d'images où il a été vu
         self.confirmed: set[int] = set()          # suivis confirmés (plus une ombre)
         self._fresh = True
@@ -80,6 +86,7 @@ class Detector:
         self.side_votes.clear()
         self.memory.clear()
         self.motion.clear()
+        self.ident.clear()
         self.seen_count.clear()
         self.confirmed.clear()
 
@@ -115,16 +122,19 @@ class Detector:
             box = (int(ox + x0 * sx), int(oy + y0 * sy), int(ox + x1 * sx), int(oy + y1 * sy))
             enemy = side == "1"
             color = team_color(crop, (int(x0), int(y0), int(x1), int(y1))) if "tower" not in name else 0
-            if tid >= 0:
-                # le camp d'une unité ne change jamais : vote sur ses 8 premières images, puis figé. La couleur du
-                # badge (bleu/rouge) compte 3 fois plus que l'avis du détecteur, qui confond souvent les camps
-                v = self.side_votes.setdefault(int(tid), collections.deque(maxlen=None))
-                if len(v) < 8:
-                    v.append(3.0 * color if color else (conf if enemy else -conf))
-                enemy = sum(v) > 0
+            if tid >= 0 and "tower" not in name:
+                # camp et nom votés sur toute la vie du suivi (clashai/identity.py) : lieu de naissance, badge, détecteur
+                idt = self.ident.get(int(tid))
+                if idt is None:
+                    idt = self.ident[int(tid)] = TrackIdentity(y1 / crop.shape[0])
+                idt.observe(name, conf, enemy, color, now)
+                enemy = idt.enemy
+                name = idt.name(None if enemy else OWN_NAMES)
             elif color:
                 enemy = color > 0
             units.append(Unit(int(tid), name, enemy, float(conf), box))
+        if len(self.ident) > 300:
+            self.ident = {k: v for k, v in self.ident.items() if now - v.last_t < 5}
         if self.track:
             self.motion.forget(now)
             self.motion.observe(units, now)      # avant _confirm : la 1re image d'une unité compte aussi
