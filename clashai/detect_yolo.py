@@ -115,7 +115,18 @@ class Detector:
         if self.track:
             units = self._coast(self._confirm(units))
         self._update_trails([u for u in units if not u.coasted])
-        return units
+        return self._drop_tower_ghosts(units)
+
+    @staticmethod
+    def _drop_tower_ghosts(units: list[Unit]) -> list[Unit]:
+        """Une « unité » dont la boîte recouvre presque une tour est la tour elle-même mal lue (ex. Chevalier sur notre
+        tour princesse) : on l'écarte. Une vraie unité qui attaque une tour est plus petite ou décalée."""
+        towers = [u.box for u in units if "tower" in u.name]
+
+        def iou(a, b):
+            ix = max(0, min(a[2], b[2]) - max(a[0], b[0])) * max(0, min(a[3], b[3]) - max(a[1], b[1]))
+            return ix / ((a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - ix + 1e-9)
+        return [u for u in units if "tower" in u.name or not any(iou(u.box, t) > 0.45 for t in towers)]
 
     COAST_S = 0.8
     CONFIRM_CONF = 0.6          # une unité NOUVELLE doit être sûre (>= 60 %)…
