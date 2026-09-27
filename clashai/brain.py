@@ -656,7 +656,7 @@ class Brain:
         for card in playable:
             if card not in DECK or DECK[card].kind == "spell" or card == "giant":
                 continue
-            if all(g.name in AIR_UNITS for g in group) and not card_info.combat(card)["hits_air"]:
+            if t.name in AIR_UNITS and not card_info.combat(card)["hits_air"]:
                 continue                # ne peut pas les toucher (Mini P.E.K.K.A contre des Gargouilles) : élixir perdu
             r = self._duel(card, group, near_tower)
             if r:
@@ -716,6 +716,8 @@ class Brain:
                 side = 1 if lane_x < 0.5 else -1
                 x, y = _clamp_own(lane_x + side * 3 * PHONE.tw, max(t.y + 0.04, OWN_TOWER_Y - 3 * PHONE.th))
                 push_cost = sum(_cost(n) for n in {s.name for s in threats if math.hypot(s.x - t.x, s.y - t.y) < 0.2})
+                if push_cost < 3:
+                    return None             # Chauves-souris seules (2) : la tour s'en charge, pas d'appât à 3-4
                 return Decision(decoy, playable[decoy], x, y,
                                 f"défense : {t.name} (volant, rien pour tirer en l'air) -> {decoy} en appât décalé",
                                 precise=True, push=push_cost)
