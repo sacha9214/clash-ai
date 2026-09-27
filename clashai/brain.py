@@ -284,12 +284,19 @@ class Brain:
         """Corrige le camp deviné par le détecteur avec ce que l'IA sait de ses propres coups."""
         self.own_recent = [r for r in self.own_recent if now - r[3] < 6]
         own_units = {u for c in DECK.values() for u in c.units}
+        unit_card = {u: c.name for c in DECK.values() for u in c.units}
         out = []
         for s in seen:
             base = s.name.replace("-evolution", "")
             if s.enemy and s.y > RIVER_Y and any(s.name in names and _tile_dist(s.x, s.y, x, y) < 3
                                                  for names, x, y, _ in self.own_recent):
                 # NOTRE unité fraîchement posée prise pour une ennemie (ex. notre Géant « ennemi » sur sa case de pose)
+                s = Seen(s.name, False, s.x, s.y, s.vx, s.vy)
+            elif (s.enemy and base in own_units and len(self.opp_deck) >= 4
+                  and unit_card.get(base) not in self.opp_deck
+                  and now - self.own_played.get(base, -1e9) < OWN_UNIT_LIFE_S and s.vy <= 0):
+                # « ennemie » d'une carte qu'il n'a pas, qu'on vient de jouer, et qui monte vers ses tours :
+                # c'est la nôtre (27/09 : nos Gargouilles prises pour des ennemies -> Mousquetaire gâchée)
                 s = Seen(s.name, False, s.x, s.y, s.vx, s.vy)
             elif not s.enemy and s.y < RIVER_Y - 0.02 and (
                     base not in own_units or now - self.own_played.get(base, -1e9) > OWN_UNIT_LIFE_S):

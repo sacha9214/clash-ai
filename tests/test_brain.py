@@ -401,3 +401,11 @@ def old_deck(monkeypatch):
     from clashai.cards import BENCH, DECK
     for c in ("archers", "arrows"):
         monkeypatch.setitem(DECK, c, BENCH[c])
+
+
+def test_our_minions_read_as_enemy_are_ours_if_he_has_no_minions():
+    b = brain()
+    b.opp_deck = ["giant", "pekka", "zap", "fireball"]
+    b.played(Decision("minions", 0, *at(3, 24), "test"), 90.0)
+    d = b.decide([enemy("minion", 3, 12, vy_tiles=-1.0)], ["musketeer", "knight", "cannon", "fireball"], ALL, 8.0, 100.0)
+    assert d is None or not d.reason.startswith("défense : minion")
