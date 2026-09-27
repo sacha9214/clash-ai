@@ -338,3 +338,25 @@ def test_no_finish_when_hp_reading_is_unproven():
     b = brain()
     b.match = _low_tower_match(0.04, ok=False)
     assert b.decide([], ["fireball", "knight", "giant", "cannon"], [True, False, False, False], 4.5, 1000.0) is None
+
+
+# ---- contre-attaque avec les survivants ----
+def test_counter_push_behind_a_surviving_defender():
+    b = brain(counter_support=True, edge_push=0)
+    b.played(Decision("knight", 0, *at(3, 22), "défense : goblin -> knight", trade=1.0, push=2.0), 95.0)
+    survivor = ours("knight", 3, 20, vy_tiles=-1.0)          # il repart vers le pont
+    d = b.decide([survivor], ["archers", "fireball", "arrows", "cannon"], ALL, 5.0, 100.0)
+    assert d is not None and d.card == "archers" and d.reason.startswith("contre-attaque")
+    assert d.y > survivor.y                                    # derrière lui (vers notre Roi)
+
+
+def test_no_counter_push_without_recent_defense_or_with_an_enemy_still_here():
+    hand = ["archers", "fireball", "arrows", "cannon"]
+    b = brain(counter_support=True, edge_push=0)
+    assert b.decide([ours("knight", 3, 20, vy_tiles=-1.0)], hand, ALL, 5.0, 100.0) is None   # pas de défense récente
+    b.played(Decision("knight", 0, *at(3, 22), "défense : goblin -> knight"), 95.0)
+    d = b.decide([ours("knight", 3, 20, vy_tiles=-1.0), enemy("skeleton", 14, 24)], hand, ALL, 5.0, 100.0)
+    assert d is None or not d.reason.startswith("contre-attaque")
+    b0 = brain(counter_support=False, edge_push=0)
+    b0.played(Decision("knight", 0, *at(3, 22), "défense : goblin -> knight"), 95.0)
+    assert b0.decide([ours("knight", 3, 20, vy_tiles=-1.0)], hand, ALL, 5.0, 100.0) is None

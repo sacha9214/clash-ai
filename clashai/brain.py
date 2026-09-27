@@ -62,7 +62,9 @@ TOWER_DPS = 60.0                            # tour princesse, niveau 1 (même é
 TOWER_RANGE_TILES = 7.5
 # fin de match : 30 dernières secondes du temps réglementaire (3:00), puis prolongation = mort subite
 LATE_S, REGULATION_S = 150.0, 180.0
-PUSH_MEMORY_S = 8.0                         # défenses contre la même attaque adverse : créditée une fois
+PUSH_MEMORY_S = 8.0
+COUNTER_WINDOW_S = 12.0                     # contre-attaque : nos défenseurs posés il y a moins de 12 s
+STURDY_HP = 450                             # PV (niveau 1) d'un défenseur qui vaut la peine d'être soutenu                         # défenses contre la même attaque adverse : créditée une fois
 TANK_DEADLINE_S = 12.0                      # un tank qui vise les bâtiments, du pont à notre tour : ~9 s de marche + 1er coup
 # Valeur d'un sort (élixir détruit) : une unité sur notre moitié frappe déjà nos tours/troupes -> compte plus ;
 # une tour ennemie dans le cercle encaisse aussi (dégâts réduits aux tours)
@@ -186,6 +188,7 @@ class Brain:
         self.giant_lane: int | None = None
         self.giant_time = -1e9
         self.last_defense_lane: int | None = None
+        self.last_defense_t = -1e9
         self.opp_elixir = 5.0        # estimation fournie par le modèle de l'adversaire
         self.opp_hand: list[str] = []            # sa main probable (cartes connues hors des 4 dernières)
         self.opp_deck: list[str] = []
@@ -360,7 +363,7 @@ class Brain:
         if d.reason.startswith("punition"):
             self.opp_heavy_t = -1e9                                    # une seule punition par carte lourde
         if d.reason.startswith("défense"):
-            self.last_defense_lane = _lane(d.x)
+            self.last_defense_lane, self.last_defense_t = _lane(d.x), now
 
     def _decide(self, seen: list[Seen], hand: list[str | None], ready: list[bool], elixir: float,
                 now: float) -> Decision | None:
@@ -427,6 +430,28 @@ class Brain:
             # jouer le contre maintenant (il reviendra en main ; l'élixir perdu, jamais)
             d = self._attack(seen, playable, elixir, now)
         return d
+
+    def _counter_push(self, seen: list[Seen], playable: dict, elixir: float, now: float, support_at: float,
+                      mode: str | None, edge: int) -> Decision | None:
+        """Contre-attaque : un de nos défenseurs solides a survécu et repart vers le pont -> une carte derrière lui.
+        L'élixir de la défense est déjà « rentabilisé » : ajouter du soutien est l'attaque la moins chère du jeu."""
+        if (not self.p.get("counter_support") or mode == "défendre l'avance" or edge < 0 or elixir < support_at
+                or now - self.last_defense_t > COUNTER_WINDOW_S):
+            return None
+        survivors = [s for s in seen if not s.enemy and s.name != "giant" and _lane(s.x) == self.last_defense_lane
+                     and card_info.combat(s.name)["hp"] >= STURDY_HP and s.vy / PHONE.th < -0.2
+                     and RIVER_Y < s.y < OWN_TOWER_Y + 0.02]
+        if not survivors or any(e.enemy and e.y > RIVER_Y for e in seen):
+            return None                                   # rien à pousser, ou encore un ennemi chez nous
+        lead = min(survivors, key=lambda s: s.y)          # le plus avancé
+        order = ["archers", "musketeer", "valkyrie", "mini-pekka", "knight"]
+        if set(self.opp_hand) & SMALL_SPELLS:
+            order = [c for c in order if c != "archers"] + ["archers"]
+        for card in order:
+            if card in playable:
+                x, y = _clamp_own(lead.x, lead.y + 0.05)  # juste derrière lui : il encaisse, notre soutien tire
+                return Decision(card, playable[card], x, y, f"contre-attaque : {card} derrière notre {lead.name}")
+        return None
 
     def _edge(self, elixir: float) -> tuple[int, float]:
         """(+1 en avance / -1 en retard / 0, écart) : notre élixir + nos troupes sur le terrain, moins son élixir estimé
@@ -806,6 +831,9 @@ class Brain:
                 if card in playable:
                     x, y = _clamp_own(g.x, g.y + 0.07)       # ~4 cases derrière : hors d'une Boule de feu sur le Géant
                     return Decision(card, playable[card], x, y, f"soutien : {card} derrière le Géant")
+        d = self._counter_push(seen, playable, elixir, now, support_at, mode, edge)
+        if d:
+            return d
         if elixir >= self._cycle_at(now) and playable:
             # élixir plein et rien à faire : on fait tourner la carte la moins chère, sans risque
             card = min((c for c in playable if DECK[c].kind == "troop"), key=lambda c: DECK[c].cost, default=None)
