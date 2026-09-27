@@ -443,3 +443,10 @@ def test_pekka_read_as_his_mini_pekka_when_he_has_no_pekka():
     b.opp_deck = ["mini-pekka", "giant", "minions", "zap"]
     d = b.decide([enemy("pekka", 3, 22)], ["knight", "cannon", "minions", "fireball"], ALL, 8.0, 100.0)
     assert d is None or "pekka x" not in d.reason.replace("mini-pekka", "")
+
+
+def test_waits_a_moment_for_valkyrie_against_a_crowd():
+    b = brain()
+    seen = [enemy("barbarian", 3, 20 + i % 2) for i in range(5)]
+    d = b.decide(seen, ["musketeer", "mini-pekka", "valkyrie", "knight"], ALL, 3.0, 100.0)
+    assert d is None

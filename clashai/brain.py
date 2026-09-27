@@ -449,6 +449,14 @@ class Brain:
             if all(s["hp"] and s["dps"] for s in st) and dps * hp / 60 < 170:
                 threats = []
         if threats:
+            # une nuée au sol (3+ unités) et notre Valkyrie en main, presque payable : on l'attend (~1 s) plutôt
+            # que de jeter un Chevalier qui « ralentit seulement » (27/09 : 5 Barbares, Chevalier à 2,8 élixirs)
+            t0 = max(threats, key=lambda s: s.y)
+            crowd = [s for s in threats if s.name not in AIR_UNITS and _tile_dist(s.x, s.y, t0.x, t0.y) < 3]
+            vi = next((i for i, c in enumerate(hand) if c == "valkyrie" and ready[i]), None)
+            if (len(crowd) >= 3 and vi is not None and "valkyrie" not in playable
+                    and elixir >= DECK["valkyrie"].cost - 1.5 and t0.y < OWN_TOWER_Y - 0.06 and not self._tower_low(_lane(t0.x))):
+                return None
             return self._defend(threats, playable)
         # Canon posé à l'avance : son tank ou son Cochon descend vers le pont (38 % des Canons des pros)
         coming = [e for e in enemies if (e.name in TANK_UNITS or e.name in FAST_BUILDING_HUNTERS) and e.name not in AIR_UNITS
