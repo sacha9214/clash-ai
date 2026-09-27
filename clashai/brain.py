@@ -861,7 +861,7 @@ class Brain:
         if ours and elixir >= support_at and mode != "défendre l'avance":
             g = ours[0]
             order = ["musketeer", "archers", "valkyrie", "mini-pekka", "minions"]
-            if set(self.opp_hand) & SMALL_SPELLS:
+            if set(self.opp_hand) & (SMALL_SPELLS | BIG_SPELLS):   # Boule de feu / Poison tuent aussi les archères
                 # ses Flèches/Zap/Bûche tueraient archères ou gargouilles : on les passe en dernier
                 order = [c for c in order if c not in ("archers", "minions")] + ["archers", "minions"]
             # garder de quoi défendre l'AUTRE couloir (Chevalier/Canon = 3) : s'il contre-attaque de l'autre côté
