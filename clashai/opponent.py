@@ -93,6 +93,8 @@ def base_name(name: str) -> str:
 
 UNIT2CARD.update({v: UNIT2CARD[base_name(v)] for v in VARIANTS})
 CARD_COST = {c: cost for c, cost, _ in UNIT2CARD.values()}
+CARD_COST["goblin-gang"] = 3       # Gang de gobelins : Gobelins + Gobelins à lance posés ensemble (une seule carte)
+GANG = {"goblins", "spear-goblins"}
 SPELLS = {"arrows", "fireball", "zap", "poison", "the-log", "rocket", "lightning", "freeze", "earthquake",
           "tornado", "goblin-barrel", "barbarian-barrel", "giant-snowball", "graveyard", "rage", "clone",
           "royal-delivery", "goblin-curse", "vines"}
@@ -309,6 +311,11 @@ class Opponent:
         quiet = now - max((t for t, _ in self.recent.values()), default=self.start) > 5
         if card not in self.played and conf >= STRONG:
             self.strong.add(card)
+        if card in GANG and self.played and self.played[-1] in GANG - {card}                 and now - self.recent.get(self.played[-1], (-1e9, 0))[0] < 1.5:
+            # Gobelins puis Gobelins à lance (ou l'inverse) presque en même temps : c'est UN Gang de gobelins
+            prev = self.played.pop()
+            self.elixir += CARD_COST[prev]
+            card = "goblin-gang"
         self.recent[card] = (now, 1)
         cost = CARD_COST[card]
         if heavy_resync and cost >= 6 and quiet:

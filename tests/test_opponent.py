@@ -269,3 +269,12 @@ def test_elixir_bookkeeping():
     o.update([], 121.4, H)
     assert o.elixir == pytest.approx(1.0)                                    # x2 après 120 s
     assert o.gained == pytest.approx(120.0 / 2.8 + 1.0)
+
+
+def test_goblin_gang_counted_once():
+    from clashai.opponent import Opponent as OpponentModel
+    m = OpponentModel.__new__(OpponentModel)
+    m.played, m.recent, m.strong, m.elixir, m.start = [], {}, set(), 10.0, 0.0
+    m._record("goblins", 100.0, 0.9, heavy_resync=True)
+    m._record("spear-goblins", 100.5, 0.9, heavy_resync=True)
+    assert m.played == ["goblin-gang"] and abs(m.elixir - 7.0) < 1e-6
