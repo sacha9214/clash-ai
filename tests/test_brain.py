@@ -375,3 +375,11 @@ def test_unknown_stats_threat_is_still_defended():
     d = brain().decide([enemy("boss-bandit", 3, 20, vy_tiles=1.0)], ["knight", "mini-pekka", "arrows", "fireball"],
                        ALL, 6.0, 100.0)
     assert d is not None and d.reason.startswith("défense")
+
+
+def test_air_attack_without_anti_air_gets_an_offset_decoy():
+    b = brain()
+    t = enemy("mega-minion", 3, 22)
+    d = b.decide([t], ["valkyrie", "giant", "cannon", "fireball"], ALL, 8.0, 100.0)
+    assert d is not None and d.card == "valkyrie" and "appât" in d.reason
+    assert abs(d.x - t.x) > 0.08                         # pas collée à l'unité volante : décalée vers le centre

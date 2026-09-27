@@ -697,6 +697,19 @@ class Brain:
         lane_x = LANES_X[_lane(t.x)]
         is_air, is_tank = t.name in AIR_UNITS, t.name in TANK_UNITS
         swarm = sum(1 for s in threats if s.name in SWARM_UNITS and math.hypot(s.x - t.x, s.y - t.y) < 0.15)
+        if is_air and t.name not in ("balloon", "lava-hound"):   # ceux-là ignorent les troupes : pas d'appât
+            anti_air = [c for c in playable if c in DECK and DECK[c].kind == "troop" and card_info.combat(c)["hits_air"]]
+            decoy = next((c for c in ("valkyrie", "knight") if c in playable), None)
+            if not anti_air and decoy and t.y < OWN_TOWER_Y - 0.03:
+                # rien ne tire en l'air : un tank au sol sert d'APPÂT. Pas collé à l'unité volante, mais décalé
+                # vers le centre (~3 cases) et un peu devant la tour : elle doit faire un détour pour l'atteindre,
+                # pendant ce temps nos deux tours la frappent, et l'appât encaisse moins longtemps
+                side = 1 if lane_x < 0.5 else -1
+                x, y = _clamp_own(lane_x + side * 3 * PHONE.tw, max(t.y + 0.04, OWN_TOWER_Y - 3 * PHONE.th))
+                push_cost = sum(_cost(n) for n in {s.name for s in threats if math.hypot(s.x - t.x, s.y - t.y) < 0.2})
+                return Decision(decoy, playable[decoy], x, y,
+                                f"défense : {t.name} (volant, rien pour tirer en l'air) -> {decoy} en appât décalé",
+                                precise=True, push=push_cost)
         if is_air:
             order = ["musketeer", "archers", "minions", "spear-goblins"]
         elif is_tank:
