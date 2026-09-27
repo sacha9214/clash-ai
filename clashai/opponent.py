@@ -257,6 +257,10 @@ class Opponent:
         deck = self.deck
         if card not in deck and c.conf < (STRONG if len(deck) >= 8 else NOISE):
             return None                              # carte inconnue peu sûre : bruit
+        # il ne peut pas payer : estimation à ~0 et la carte coûte bien plus -> sans doute une unité déjà comptée
+        # vue sous un autre nom (match du 27/09 : 35 cartes comptées, 5 poses en 9 s au début)
+        if self.elixir < CARD_COST[card] - 2.5 and c.conf < STRONG:
+            return None
         self.trusted.add(tid)
         return self._record(card, now, c.conf, heavy_resync=True)
 
