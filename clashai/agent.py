@@ -81,7 +81,8 @@ class Agent:
         self.brain.opp_elixir = self.opp.elixir
         self.brain.opp_hand, self.brain.opp_deck = self.opp.hand, self.opp.deck
         d = self.brain.decide(seen, hand, ready, el, now)
-        info = [f"elixir {el:.1f}  main : " + ", ".join(c or "?" for c in hand), self.match.summary()]
+        info = [f"elixir {el:.1f}  main : " + ", ".join(c or "?" for c in hand), self.match.summary(),
+                f"avance {el - self.opp.elixir:+.1f} (lui ~{self.opp.elixir:.1f})  echanges (estime) {self.brain.trade_balance:+.1f}"]
         return units, d, info, hand, el
 
     def _show(self, img, units, d, info):
@@ -262,6 +263,7 @@ class Agent:
                     self.spells_pending.append({"card": d.card, "x": d.x, "y": d.y, "t_tap": now})
                 log.append({"t": round(now, 2), "card": d.card, "x": round(d.x, 3), "y": round(d.y, 3), "tile": d.tile,
                             "reason": d.reason, "ok": ok, "play_ms": play_ms, "elixir": el, "hand": hand,
+                            "opp_elixir": round(self.opp.elixir, 1), "trade": d.trade,
                             "units": [(u.name, u.enemy, u.center) for u in units]})
                 if ok:
                     last_play = time.time()
@@ -292,4 +294,5 @@ class Agent:
         with open(os.path.join(folder, "opponent.json"), "w") as f:
             json.dump({"played": self.opp_log, "deck": self.opp.deck}, f, indent=1)
         return {"game": game_id, "played": n, "refused": refused, "params": self.brain.p,
+                "trade_balance": self.brain.trade_balance,
                 "enemy_deck": self.opp.deck}

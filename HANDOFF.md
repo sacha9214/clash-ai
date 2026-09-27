@@ -77,6 +77,13 @@ Colle ce fichier à Claude Code pour reprendre.
    code bogué, parce que l'état initial utilise l'horloge réelle.
 9. Tout filtre « crédible / pas crédible » peut aveugler le cerveau (unités invoquées, évolutions, deck verrouillé
    par des fantômes) : ne cacher une unité que si c'est vérifiable.
+10. L'avance d'élixir se compte main + TERRAIN : sans les troupes posées, l'IA se croyait « en retard » juste après
+    son Géant et ne le soutenait plus (135 soutiens supprimés au rejeu).
+11. Un bilan d'échanges doit créditer chaque attaque adverse UNE fois : chaque carte posée contre le même Géant
+    « gagnait » 5 élixir (+371 fictifs sur 52 matchs).
+- Avance d'élixir (`edge_push`, bandit) : Géant plus tôt avec 3+ d'avance, pas d'attaque avec 3+ de retard.
+  Bilan des échanges estimé : à l'écran, dans `decisions.jsonl` (`trade`, `opp_elixir`) et `journal.jsonl`
+  (`trade_balance`) -> comparer bilan et victoires quand il y aura des matchs.
 
 ## Nuit du 25 au 26/09 (autonome, hors de Claude)
 - `scripts/night_detector.py` (PID 39148) : YOLO11s, 64 199 images (60 000 synthétiques + 4 199 réelles), 8 h max,

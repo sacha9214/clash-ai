@@ -219,3 +219,42 @@ def test_evolved_goblin_barrel_gets_the_valkyrie_and_ui_bars_are_not_units():
     assert [s.name for s in seen] == ["goblin-barrel"]
     d = brain().decide(seen, ["valkyrie", "knight", "arrows", "giant"], ALL, 6.0, 100.0)
     assert d is not None and d.card == "valkyrie"
+
+
+# ---- avance d'élixir et bilan des échanges ----
+def test_ahead_launches_the_giant_earlier():
+    b = brain(edge_push=3, giant_elixir=9)
+    b.opp_elixir = 1.5                                   # il vient de tout dépenser
+    d = b.decide([], ["giant", "arrows", "fireball", "cannon"], ALL, 7.0, 100.0)
+    assert d is not None and d.card == "giant" and "avance" in d.reason
+    b0 = brain(edge_push=0, giant_elixir=9)
+    b0.opp_elixir = 1.5
+    assert b0.decide([], ["giant", "arrows", "fireball", "cannon"], ALL, 7.0, 100.0) is None
+
+
+def test_behind_holds_the_giant():
+    b = brain(edge_push=3, giant_elixir=7)
+    b.opp_elixir = 10.0
+    seen = [enemy("golem", 9, 3)]                        # il prépare un Golem au fond (8 élixir sur le terrain)
+    d = b.decide(seen, ["giant", "arrows", "fireball", "cannon"], ALL, 7.0, 100.0)
+    assert d is None or d.card != "giant"
+    d = brain(edge_push=0, giant_elixir=7).decide(seen, ["giant", "arrows", "fireball", "cannon"], ALL, 7.0, 100.0)
+    assert d is not None and d.card == "giant"
+
+
+def test_our_giant_on_the_board_counts_so_we_still_support_it():
+    b = brain(edge_push=3, support_min_elixir=4)
+    b.opp_elixir = 9.0                                   # 4 en main mais un Géant (5) qui avance : pas « en retard »
+    b.played(Decision("giant", 0, *at(3, 28), "attaque : Géant"), 90.0)
+    d = b.decide([ours("giant", 3, 20, vy_tiles=-0.8)], ["mini-pekka", "arrows", "fireball", "cannon"], ALL, 4.0, 100.0)
+    assert d is not None and d.reason.startswith("soutien")
+
+
+def test_trade_mini_pekka_on_giant_and_push_credited_once():
+    b = brain()
+    d = b.decide([enemy("giant", 3, 19, vy_tiles=0.8)], ["knight", "mini-pekka", "archers", "valkyrie"], ALL, 6.0, 100.0)
+    assert d.card == "mini-pekka" and d.trade == pytest.approx(5.0, abs=0.01)   # il tue le Géant sans une égratignure
+    b.played(d, 100.0)
+    d2 = Decision("knight", 1, *at(3, 22), "défense : giant -> knight", trade=2.0, push=5.0)
+    b.played(d2, 103.0)                                  # 2e carte contre le même Géant : l'attaque est déjà comptée
+    assert b.trade_balance == pytest.approx(5.0 - 3.0, abs=0.01)
