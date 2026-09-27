@@ -407,6 +407,14 @@ class Brain:
             # une unité seule à 1-2 élixir : nos défenseurs coûtent 3+, la tour encaisse, on gagne l'échange
             elif len(threats) == 1 and threats[0].name not in TANK_UNITS and _cost(threats[0].name) <= 2:
                 threats = []
+        if threats and self.p.get("stat_defense", True) and not any(self._tower_low(_lane(t.x)) for t in threats):
+            # dégâts que la tour prendrait si on ne fait RIEN : leurs dégâts/s x le temps que la tour met à les tuer
+            # seule (~60 dégâts/s, niveau 1). Petit (< ~12 % d'une tour) : la tour s'en charge, on garde l'élixir
+            # (match du 27/09 : Chevalier puis Mini P.E.K.K.A sur un Golem de glace, Canon sur 1 squelette)
+            hp = sum(card_info.combat(t.name)["hp"] for t in threats)
+            dps = sum(card_info.combat(t.name)["dps"] for t in threats)
+            if dps * hp / 60 < 170:
+                threats = []
         if threats:
             return self._defend(threats, playable)
         # Canon posé à l'avance : son tank ou son Cochon descend vers le pont (38 % des Canons des pros)
@@ -558,6 +566,18 @@ class Brain:
                 return Decision(card, playable[card], *center,
                                 f"{card} sur un groupe de {n} ({value:.1f} élixir détruits)", precise=True,
                                 trade=round(value - DECK[card].cost, 2))
+            def worth_alone() -> bool:
+                """Sort sur UNE cible : seulement s'il la tue (presque), d'après la base des cartes (dégâts du sort
+                vs PV de l'unité, même niveau), ou s'il touche aussi une tour ennemie. Jamais sur un Géant seul."""
+                dmg = (card_info.db().get(card, {}).get("spell") or {}).get("damage_lvl1") or 0
+                near = [e for e in pool if _tile_dist(e.x, e.y, *center) < r]
+                if not near:
+                    return False
+                kills = dmg >= 0.9 * card_info.combat(near[0].name)["hp"]
+                hits_tower = any(_tile_dist(center[0], center[1], lx, ENEMY_TOWER_Y) < r for lx in LANES_X)
+                return kills or hits_tower
+            if best >= min_count and (best >= 2 or worth_alone()):
+                return Decision(card, playable[card], *center, f"{card} sur un groupe de {best}")
         return None
 
     def _future(self, u: Seen, t: float) -> tuple[float, float]:
@@ -647,10 +667,19 @@ class Brain:
                                 DECK[card].cost, card, t_kill))
         if not options:
             return None
+        # garder Canon / Mini P.E.K.K.A pour son Géant/Cochon s'il l'a en main et qu'une autre carte gagne ici
+        if t.name not in WIN_CONDITIONS and set(self.opp_hand) & WIN_CONDITIONS:
+            spare = [o for o in options if o[5] not in ("cannon", "mini-pekka") and not o[0]]
+            if spare:
+                options = spare
         options.sort()
         lose, pricey, _, neg_margin, cost, card, t_kill = options[0]
         if lose and pricey:
             return None                                     # rien ne gagne à bon prix : la tour encaisse
+        if lose and not near_tower and t.name not in TANK_UNITS:
+            # personne ne gagne seul au pont : on attend qu'ils entrent dans la portée de notre tour, puis on défend
+            # à côté d'elle (tour + unité ensemble) — au lieu de perdre l'unité et l'élixir loin de la tour
+            return None
         me = card_info.combat(card)
         their_range = max(card_info.combat(g.name)["range"] for g in group)
         if me["range"] >= 4 and their_range < me["range"] - 1:
@@ -658,6 +687,11 @@ class Brain:
             gap = min(me["range"] - 0.8, their_range + 2.5)
             x, y = t.x, t.y + gap * PHONE.th
             where = f"à {gap:.1f} cases (sa portée {their_range:.1f}, la nôtre {me['range']:.1f})"
+        elif lose:
+            # combat difficile : devant notre tour, pour que tour et unité frappent ensemble
+            lane_x = LANES_X[_lane(t.x)]
+            x, y = lane_x + (0.06 if lane_x < 0.5 else -0.06), OWN_TOWER_Y - 0.05
+            where = "devant notre tour (tour + unité)"
         else:
             x, y = t.x + t.vx * 0.5, t.y + 0.05
             where = "au contact"
@@ -687,7 +721,7 @@ class Brain:
         near_tower = t.y > OWN_TOWER_Y - 0.1
         # Canon : le bâtiment au centre attire les tanks (Géant, Hog…) entre les deux tours
         if "cannon" in playable and not is_air and (is_tank or t.name in FAST_BUILDING_HUNTERS or t.name in SINGLE_MELEE
-                                                     or swarm >= 2 or _cost(t.name) >= 3):
+                                                     or _cost(t.name) >= 3):   # pas contre les nuées : 1 cible à la fois
             col = 8 if lane_x < 0.5 else 9             # centre, côté de la menace
             if t.name in FAST_BUILDING_HUNTERS:
                 row, why = OWN_FIRST_ROW + 4, "4 cases sous la rivière : le Cochon est dévié entre les 2 tours"
