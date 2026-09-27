@@ -163,3 +163,43 @@ def test_device_import_without_scrcpy(monkeypatch):
     import clashai.device as D
     D = importlib.reload(D)               # avant : IndexError à l'import quand scrcpy-server est introuvable
     assert isinstance(D.SERVER_LOCAL, str)
+
+
+# ---- PV des tours ennemies (barre rouge au-dessus de chaque tour, calibrée en début de match) ----
+TOWER = (80, 240, 160, 320)                                   # boîte de la tour ennemie gauche (détecteur)
+
+
+class _Tower:
+    name, box = "queen-tower", TOWER
+    center = ((TOWER[0] + TOWER[2]) // 2, (TOWER[1] + TOWER[3]) // 2)
+
+
+def _tower_frame(frac):
+    img = np.zeros((H, W, 3), np.uint8)
+    img[222:228, 85:85 + int(70 * frac)] = (30, 30, 230)       # barre rouge (BGR) au-dessus de la tour
+    return img
+
+
+def test_enemy_tower_hp_self_calibrates_and_ignores_occlusion():
+    m = MatchState(start=0.0)
+    for t in range(8):                                          # 20 premières s : tour intacte = barre pleine
+        m.update(_tower_frame(1.0), [_Tower()], now=1.0 + t)
+    assert m.enemy_hp_ok
+    for t in range(9):
+        m.update(_tower_frame(0.3), [_Tower()], now=30.0 + t)
+    assert m.enemy_hp[0] == pytest.approx(0.3, abs=0.05)
+    for t in range(3):                                          # 3 images masquées : la médiane tient
+        m.update(_tower_frame(0.0), [_Tower()], now=40.0 + t)
+    assert m.enemy_hp[0] == pytest.approx(0.3, abs=0.05)
+
+
+def test_enemy_tower_hp_off_when_no_clean_full_bar():
+    m = MatchState(start=0.0)
+    rng = np.random.default_rng(0)
+    for t in range(8):                                          # longueurs incohérentes : lecture non fiable
+        m.update(_tower_frame(float(rng.uniform(0.2, 1.0))), [_Tower()], now=1.0 + t)
+    assert not m.enemy_hp_ok
+    m = MatchState(start=0.0)
+    for t in range(8):                                          # aucune barre visible
+        m.update(_tower_frame(0.0), [_Tower()], now=1.0 + t)
+    assert not m.enemy_hp_ok

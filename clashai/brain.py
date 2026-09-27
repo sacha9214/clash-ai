@@ -68,6 +68,10 @@ TANK_DEADLINE_S = 12.0                      # un tank qui vise les bâtiments, d
 # une tour ennemie dans le cercle encaisse aussi (dégâts réduits aux tours)
 OUR_SIDE_BONUS = 1.3
 SPELL_TOWER_VALUE = {"fireball": 1.0, "arrows": 0.4}
+# Achever une tour : dégâts du sort sur une tour / PV d'une tour princesse (niveau 11 : Boule de feu 207, Flèches 93,
+# tour 3052 ; même rapport à tout niveau égal). Marge 0.8 : on ne tire que si le sort la détruit à coup sûr.
+TOWER_HP_L11 = 3052
+FINISH_MARGIN = 0.8
 
 # Rayon réel des sorts dans le jeu (cases) et Roi ennemi (4x4 cases, colonnes 7-11, rangées 0.5-4.5).
 # Toucher le Roi l'ACTIVE : il tire pour le reste du match -> nos sorts ne doivent jamais l'effleurer.
@@ -374,6 +378,9 @@ class Brain:
         enemies = [e for e in enemies if e.name != "goblin-barrel"]
         threats = [s for s in enemies if s.y > RIVER_Y - self.p['defend_line']]   # sur notre moitié ou au pont
 
+        d = self._finish_tower(playable)
+        if d:
+            return d
         d = self._spells([e for e in enemies if e.name not in SPAWNERS], playable)
         if d:
             return d
@@ -456,6 +463,29 @@ class Brain:
         un seuil à 10 n'était jamais atteint (l'IA restait pleine sans rien faire)."""
         fast = self.match is not None and self.match.phase(now) != "normal"
         return min(self.p["cycle_at"], 9.4) - (1.5 if fast else 0)
+
+    def _finish_tower(self, playable: dict) -> Decision | None:
+        """Une tour ennemie presque morte : le sort qui l'achève à coup sûr = une couronne (si la lecture de ses PV a
+        fait ses preuves pendant ce match, towers.MatchState.enemy_hp_ok)."""
+        m = self.match
+        if m is None or not getattr(m, "enemy_hp_ok", False) or not self.p.get("finish_towers", True):
+            return None
+        for card in ("arrows", "fireball"):                   # le moins cher qui suffit
+            if card not in playable:
+                continue
+            share = card_info.tower_damage(card) / TOWER_HP_L11
+            for lane in sorted((0, 1), key=lambda l: m.enemy_hp[l]):
+                if m.enemy_alive[lane] and 0 < m.enemy_hp[lane] <= FINISH_MARGIN * share:
+                    # centre sur la tour, ou décalé vers le bord du terrain (Flèches : rayon 3.5, le Roi est tout près)
+                    spots = [(LANES_X[lane] + (-dx if lane == 0 else dx) * PHONE.tw, ENEMY_TOWER_Y) for dx in (0, 0.75, 1.5)]
+                    spot = next((p for p in spots if not _hits_enemy_king(card, *p)), None)
+                    if spot is None:
+                        continue
+                    x, y = spot
+                    return Decision(card, playable[card], x, y,
+                                    f"{card} achève la tour {'gauche' if lane == 0 else 'droite'} "
+                                    f"({m.enemy_hp[lane]:.0%} de PV)", precise=True)
+        return None
 
     def _spell_value(self, card: str, hit: list[tuple[Seen, tuple[float, float]]], center: tuple[float, float]) -> float:
         """Élixir détruit par le sort : pour chaque unité touchée, ce qu'elle vaut x (part de ses PV enlevée)².

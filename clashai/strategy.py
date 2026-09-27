@@ -33,14 +33,15 @@ SPACE = {
     "stat_defense": [True, False],          # défenseur choisi par combat simulé (statistiques) plutôt que listes fixes
     "spell_value": [0.6, 0.8, 1.0],         # sort lancé seulement s'il détruit au moins spell_value x son coût en élixir
     "edge_push": [0, 3, 4],
-    "endgame": [False, True],               # 30 dernières s : en tête -> défendre, mené -> tout attaquer ; prolongation -> presser                 # avance d'élixir (vs son estimation) pour attaquer tôt / retard pour ne pas attaquer ; 0 = ignoré
+    "endgame": [False, True],
+    "finish_towers": [True, False],         # sort sur une tour ennemie presque morte (lecture des PV validée en match)               # 30 dernières s : en tête -> défendre, mené -> tout attaquer ; prolongation -> presser                 # avance d'élixir (vs son estimation) pour attaquer tôt / retard pour ne pas attaquer ; 0 = ignoré
 }
 DEFAULT = {"giant_elixir": 9, "giant_spot": "king", "support_min_elixir": 4, "arrows_min": 3,
            "fireball_min": 2, "defend_line": 0.06, "counter_push": True, "cycle_at": 9.5,
            "punish_low_elixir": False, "fireball_spawners": False,
            "ignore_small": True, "punish_opposite": False, "giant_when_counter_out": False,
            "fireball_patient": False, "placement_model": True, "stat_defense": True, "spell_value": 0.8,
-           "edge_push": 3, "endgame": True}
+           "edge_push": 3, "endgame": True, "finish_towers": True}
 
 
 def _key(p: dict) -> str:
@@ -50,7 +51,7 @@ def _key(p: dict) -> str:
 # Fonctions ajoutées après les premiers matchs (26-27/09) : une partie enregistrée SANS ce paramètre a été jouée
 # sans la fonction -> elle compte pour « désactivé », pas pour la valeur par défaut d'aujourd'hui.
 # spell_value 0.0 = pas de seuil de valeur (ancien comportement), valeur qui n'est plus proposée.
-LEGACY = {"placement_model": False, "stat_defense": False, "spell_value": 0.0, "edge_push": 0, "endgame": False}
+LEGACY = {"placement_model": False, "stat_defense": False, "spell_value": 0.0, "edge_push": 0, "endgame": False, "finish_towers": False}
 
 
 def complete(p: dict) -> dict:

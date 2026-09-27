@@ -79,6 +79,9 @@ Colle ce fichier à Claude Code pour reprendre.
    par des fantômes) : ne cacher une unité que si c'est vérifiable.
 10. L'avance d'élixir se compte main + TERRAIN : sans les troupes posées, l'IA se croyait « en retard » juste après
     son Géant et ne le soutenait plus (135 soutiens supprimés au rejeu).
+12. Vérifier qu'une donnée existe VRAIMENT avant de bâtir dessus : la classe « tower-bar » vient de KataCR, notre YOLO
+    ne l'a pas (entraîné sans l'interface) -> une lecture basée dessus n'aurait jamais marché en match, alors que
+    les tests (fausses boîtes) passaient. Lister les classes du modèle (`YOLO(...).names`).
 11. Un bilan d'échanges doit créditer chaque attaque adverse UNE fois : chaque carte posée contre le même Géant
     « gagnait » 5 élixir (+371 fictifs sur 52 matchs).
 - Avance d'élixir (`edge_push`, bandit) : Géant plus tôt avec 3+ d'avance, pas d'attaque avec 3+ de retard.

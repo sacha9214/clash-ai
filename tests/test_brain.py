@@ -305,3 +305,36 @@ def test_hidden_enemy_tower_is_not_a_crown_too_soon():
     m = _match(160)
     m._enemy_seen[0] = 1000.0 - 4                          # masquée 4 s par des unités : pas encore une couronne
     assert m.crowns(1000.0) == (0, 0)
+
+
+# ---- achever une tour ----
+def _low_tower_match(frac, ok=True, now=1000.0):
+    m = _match(60, now=now)
+    m.enemy_hp, m.enemy_hp_ok = {0: frac, 1: 1.0}, ok
+    m.enemy_alive = {0: True, 1: True}
+    return m
+
+
+def test_fireball_finishes_an_almost_dead_tower_without_touching_the_king():
+    b = brain()
+    b.match = _low_tower_match(0.04)
+    d = b.decide([], ["fireball", "knight", "giant", "cannon"], [True, False, False, False], 4.5, 1000.0)
+    assert d is not None and d.card == "fireball" and "achève" in d.reason
+    from clashai.brain import _hits_enemy_king
+    assert not _hits_enemy_king("fireball", d.x, d.y)
+
+
+def test_arrows_finish_off_centre_and_not_on_a_healthy_tower():
+    b = brain()
+    b.match = _low_tower_match(0.02)
+    d = b.decide([], ["arrows", "knight", "giant", "cannon"], [True, False, False, False], 3.5, 1000.0)
+    from clashai.brain import _hits_enemy_king
+    assert d is not None and d.card == "arrows" and not _hits_enemy_king("arrows", d.x, d.y)
+    b.match = _low_tower_match(0.30)
+    assert b.decide([], ["arrows", "knight", "giant", "cannon"], [True, False, False, False], 3.5, 1000.0) is None
+
+
+def test_no_finish_when_hp_reading_is_unproven():
+    b = brain()
+    b.match = _low_tower_match(0.04, ok=False)
+    assert b.decide([], ["fireball", "knight", "giant", "cannon"], [True, False, False, False], 4.5, 1000.0) is None

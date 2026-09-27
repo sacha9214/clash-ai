@@ -91,6 +91,13 @@ def spell_damage(card: str) -> float:
     return (_num(l11) or 0) / 2.56
 
 
+def tower_damage(card: str) -> float:
+    """Dégâts d'un sort sur une tour de la couronne, niveau 11 (wiki : « 31 x3 (93) » -> 93) ; 0 si inconnu."""
+    e = db().get(card, {})
+    l11 = ((e.get("current") or {}).get("level11") or e.get("level11") or {})
+    return _num(l11.get("Crown Tower Damage")) or 0.0
+
+
 @lru_cache(maxsize=512)
 def combat(name: str) -> dict:
     """Pour un combat estimé : PV et dégâts/s PAR UNITÉ (ramenés au niveau 1 d'une commune : toutes les cartes à la
