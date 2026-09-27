@@ -2,6 +2,7 @@
 #   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 #   pip install -r requirements-test.txt && python -m pytest -q tests
 ultralytics
+lap                 # suivi ByteTrack d'ultralytics (sinon installé à la volée, impossible hors ligne)
 numpy
 opencv-python-headless
 av

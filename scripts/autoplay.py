@@ -1,4 +1,4 @@
-"""Enchaîne de vrais combats (Ladder) toute la nuit et tient un journal.
+r"""Enchaîne de vrais combats (Ladder) toute la nuit et tient un journal.
 
 États reconnus : accueil (bouton Battle), recherche d'adversaire, combat, écran de fin (OK).
 Tout écran inconnu qui dure -> capture + arrêt, pour ne jamais cliquer à l'aveugle
