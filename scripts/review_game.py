@@ -23,7 +23,7 @@ def main():
     res = next((j for j in J if j.get("game") == g.name), {})
     opp = json.loads((g / "opponent.json").read_text(encoding="utf-8")) if (g / "opponent.json").exists() else {}
     deck = set(res.get("enemy_deck") or [])
-    from clashai.opponent import UNIT2CARD
+    from clashai.opponent import SPAWNER_OF, UNIT2CARD
     print(f"=== {g.name} : {res.get('result', '?')} — {len(L)} coups, {res.get('refused', '?')} refusés ===")
     print("deck adverse vu :", ", ".join(sorted(deck)) or "?")
     played = [p["card"] for p in opp.get("played", [])]
@@ -40,7 +40,8 @@ def main():
         if r["reason"].startswith("défense : "):
             u = r["reason"][len("défense : "):].split(" ")[0]
             card = UNIT2CARD.get(u, (u,))[0]
-            if deck and card not in deck and u not in ("goblin-barrel",):
+            spawned = any(u in SPAWNER_OF.get(c, ()) for c in deck)   # Squelettes de sa Pierre tombale, etc.
+            if deck and card not in deck and not spawned and u not in ("goblin-barrel",):
                 ghosts[u] += 1
     if ghosts:
         print("⚠ défenses contre des unités ABSENTES de son deck (fausses détections) :", dict(ghosts))
