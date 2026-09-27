@@ -246,8 +246,16 @@ def test_our_giant_on_the_board_counts_so_we_still_support_it():
     b = brain(edge_push=3, support_min_elixir=4)
     b.opp_elixir = 9.0                                   # 4 en main mais un Géant (5) qui avance : pas « en retard »
     b.played(Decision("giant", 0, *at(3, 28), "attaque : Géant"), 90.0)
-    d = b.decide([ours("giant", 3, 20, vy_tiles=-0.8)], ["mini-pekka", "arrows", "fireball", "cannon"], ALL, 4.0, 100.0)
+    d = b.decide([ours("giant", 3, 20, vy_tiles=-0.8)], ["mini-pekka", "arrows", "fireball", "cannon"], ALL, 7.0, 100.0)
     assert d is not None and d.reason.startswith("soutien")
+
+
+def test_support_keeps_elixir_to_defend_the_other_lane():
+    b = brain(edge_push=3, support_min_elixir=4)
+    b.opp_elixir = 9.0                                   # il a de quoi contre-attaquer de l'autre côté
+    b.played(Decision("giant", 0, *at(3, 28), "attaque : Géant"), 90.0)
+    d = b.decide([ours("giant", 3, 20, vy_tiles=-0.8)], ["mini-pekka", "arrows", "fireball", "cannon"], ALL, 4.0, 100.0)
+    assert d is None or not d.reason.startswith("soutien")   # 4 - 4 = 0 : on garde 3 pour défendre
 
 
 def test_trade_mini_pekka_on_giant_and_push_credited_once():

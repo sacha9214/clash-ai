@@ -790,7 +790,7 @@ class Brain:
         mode = self._endgame(now)
         # il vient de poser une carte lourde : il est à sec, on frappe tout de suite dans l'AUTRE couloir
         if (self.p.get("punish_opposite") and mode != "défendre l'avance" and now - self.opp_heavy_t < 4
-                and elixir >= 4):
+                and elixir >= 7):          # 4 pour la carte + 3 gardés pour défendre l'autre côté
             for card in ("mini-pekka", "knight"):
                 if card in playable:
                     lane = self._weak_lane(seen)
@@ -851,8 +851,11 @@ class Brain:
             if set(self.opp_hand) & SMALL_SPELLS:
                 # ses Flèches/Zap/Bûche tueraient archères ou gargouilles : on les passe en dernier
                 order = [c for c in order if c not in ("archers", "minions")] + ["archers", "minions"]
+            # garder de quoi défendre l'AUTRE couloir (Chevalier/Canon = 3) : s'il contre-attaque de l'autre côté
+            # pendant notre poussée, on ne doit pas être à sec. Sauf s'il est lui-même à sec ou en fin de match
+            reserve = 0 if self.opp_elixir < 3 or mode in ("tout pour l'attaque", "mort subite") else 3
             for card in order:
-                if card in playable:
+                if card in playable and elixir - DECK[card].cost >= reserve:
                     x, y = _clamp_own(g.x, g.y + 0.07)       # ~4 cases derrière : hors d'une Boule de feu sur le Géant
                     return Decision(card, playable[card], x, y, f"soutien : {card} derrière le Géant")
         d = self._counter_push(seen, playable, elixir, now, support_at, mode, edge)
