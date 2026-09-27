@@ -40,3 +40,15 @@ uv venv --python 3.11 .venv-katacr && uv pip install --python .venv-katacr ultra
 4. Reinforcement learning after each friendly battle
 
 Automating Clash Royale is against Supercell's Terms of Service; use a secondary account, friendly battles and Training Camp only.
+
+## Tests
+
+No phone or GPU needed; CI runs them on every pull request.
+
+```bash
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+pip install -r requirements-test.txt
+python -m pytest -q tests
+```
+
+After a session of matches: `python scripts/match_report.py` writes `runs/report.html`.
