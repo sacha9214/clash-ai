@@ -495,7 +495,11 @@ class Brain:
                     x, y = _clamp_own(LANES_X[lane], 0.47)
                     self.opp_heavy_t = -1e9
                     return Decision(card, playable[card], x, y, f"punition : carte lourde en face -> {card} au pont opposé")
-        giant_at = self.p["giant_elixir"] - (1 if fast else 0)
+        # la barre d'élixir se lit au plus ~9.5 : un seuil à 10 ne serait jamais atteint ; et à élixir plein le
+        # Géant passe avant la carte qu'on ferait « tourner » (match du 27/09 : Géant jamais joué)
+        giant_at = min(self.p["giant_elixir"], 9) - (1 if fast else 0)
+        if elixir >= self.p["cycle_at"] - (1.5 if fast else 0):
+            giant_at = min(giant_at, elixir)
         # ses contres au Géant connus et tous hors de sa main (joués récemment) : fenêtre pour lancer plus tôt
         known = set(self.opp_deck) & GIANT_COUNTERS
         if self.p.get("giant_when_counter_out") and known and not known & set(self.opp_hand):

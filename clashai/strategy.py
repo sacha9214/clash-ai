@@ -12,7 +12,7 @@ STATS = Path(__file__).resolve().parents[1] / "runs/strategy_stats.json"
 
 # Paramètres réglables du cerveau et leurs plages
 SPACE = {
-    "giant_elixir": [7, 8, 9, 10],          # élixir minimum pour lancer le Géant
+    "giant_elixir": [7, 8, 9],              # élixir minimum pour lancer le Géant (la barre se lit au plus ~9.5 : pas 10)
     "giant_spot": ["king", "back", "corner", "mid", "bridge"],   # derrière le Roi, au fond côté, dans le coin, au milieu, au pont
     "support_min_elixir": [3, 4, 5],        # soutien derrière le Géant dès que…
     "arrows_min": [2, 3, 4],                # taille de groupe minimale pour Flèches
