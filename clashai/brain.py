@@ -285,6 +285,11 @@ class Brain:
         self.own_recent = [r for r in self.own_recent if now - r[3] < 6]
         own_units = {u for c in DECK.values() for u in c.units}
         unit_card = {u: c.name for c in DECK.values() for u in c.units}
+        # même unité vue DEUX fois (à nous + ennemie) au même endroit : le double « ennemi » est un fantôme
+        # (27/09 : notre Géant doublé d'un Géant ennemi -> Canon et Gargouilles contre notre propre Géant)
+        mine = [s for s in seen if not s.enemy]
+        seen = [s for s in seen if not (s.enemy and s.name in own_units
+                                        and any(m.name == s.name and _tile_dist(s.x, s.y, m.x, m.y) < 2.5 for m in mine))]
         out = []
         for s in seen:
             base = s.name.replace("-evolution", "")

@@ -430,3 +430,9 @@ def test_no_defense_against_his_buildings():
     b = brain()
     d = b.decide([enemy("goblin-cage", 4, 14)], ["minions", "knight", "cannon", "musketeer"], ALL, 6.0, 100.0)
     assert d is None or not d.reason.startswith("défense : goblin-cage")
+
+
+def test_duplicate_enemy_copy_of_our_giant_is_ignored():
+    b = brain()
+    d = b.decide([ours("giant", 3, 20), enemy("giant", 3, 20)], ["cannon", "minions", "knight", "fireball"], ALL, 8.0, 100.0)
+    assert d is None or not d.reason.startswith("défense : giant")

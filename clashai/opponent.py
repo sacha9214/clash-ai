@@ -125,6 +125,7 @@ HIS_HALF, OUR_HALF = 0.43, 0.45     # fraction de hauteur : né chez lui / sort 
 STRONG, NOISE = 0.75, 0.6           # confiance : preuve forte (carte hors deck) / seuil de bruit
 OUR_SPELL_S = 4.5                   # nos sorts (vol + effet + re-suivi) restent visibles jusqu'à 4,5 s après le tap
 CYCLE_S = 6.0                       # même carte revue avant 6 s = la même pose, pas un nouveau cycle
+OUR_TROOP_S = 30.0                  # nos troupes vivent longtemps (Mousquetaire lue « ennemie » 23 s après la pose)
 SPAWN_ACTIVE_S = 10.0               # un générateur vu depuis moins de 10 s peut encore faire naître des unités
 
 
@@ -165,7 +166,7 @@ class Opponent:
     def note_our_troop(self, now: float, card: str) -> None:
         """Nous venons de poser cette carte : une « ennemie » de la même carte dans les 12 s qui suivent,
         alors qu'il ne l'a jamais jouée, est notre troupe mal lue (27/09 : nos Gargouilles comptées chez lui)."""
-        self.our_troops = {c: t for c, t in getattr(self, "our_troops", {}).items() if now - t < 12}
+        self.our_troops = {c: t for c, t in getattr(self, "our_troops", {}).items() if now - t < OUR_TROOP_S}
         self.our_troops[card] = now
 
     def update(self, units, now: float | None = None, frame_h: int = 1280) -> list[str]:
@@ -247,7 +248,7 @@ class Opponent:
         if name not in UNIT2CARD or name in SPAWNED or name in c.near:
             return None                              # pas une carte, ou sortie d'un générateur tout proche
         card = UNIT2CARD[name][0]
-        if card not in self.played and now - getattr(self, "our_troops", {}).get(card, -1e9) < 12:
+        if card not in self.played and now - getattr(self, "our_troops", {}).get(card, -1e9) < OUR_TROOP_S:
             return None                              # notre carte de la même sorte, posée à l'instant
         if self._spawned(name, now):
             return None                              # un générateur de son deck est là : ce n'est pas une pose
