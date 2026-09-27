@@ -42,6 +42,59 @@ Colle ce fichier à Claude Code pour reprendre.
   et petits modèles sur GitHub après chaque étape.
 - Pas de téléphone le 26/09 : aucun match ; tout reste à valider en match ensuite.
 
+## 27/09 : grande revue (sans téléphone : tout est validé par tests et par rejeu des 52 matchs, PAS en match)
+- Tests : `python -m pytest -q tests` (cerveau, adversaire, bandit, détecteurs, boucle ; tout hors téléphone).
+  Rejeu des décisions enregistrées avec le cerveau actuel : `python scripts/replay_logs.py --games <runs/games>`.
+- Cerveau :
+  - Sorts jugés sur l'élixir détruit (`spell_value`), jamais sur le Roi ennemi.
+  - Mini P.E.K.K.A (pas les Archères) contre un Géant.
+  - Placements précis (`Decision.precise`) jamais déplacés par le modèle.
+  - `Brain.played()` n'est appelé qu'après un tap vérifié.
+  - Troupes virtuelles mortelles, camps corrigés, élixir jamais perdu à 10.
+- Stats des cartes ramenées au même niveau (rareté). Vitesse des unités horodatée (`clashai/motion.py`).
+- Bandit factorisé (`strategy.param_table()` pour voir ce qu'il a appris). Anciens matchs = fonctions absentes (`LEGACY`).
+- Boucle et autoplay :
+  - Flux coupé -> arrêt propre (`StreamLost`).
+  - Égalités lues « nul » ; combats pris en cours non comptés ; résultat lu seulement sur l'écran de fin.
+  - Tours Canonnier/Duchesse reconnues.
+- À valider en match d'abord : les sorts (seuil 0.8 x coût), le camp corrigé des unités, le modèle adverse.
+
+### Leçons (erreurs trouvées, à ne pas refaire)
+1. Un paramètre du bandit peut cacher un comportement nuisible : `fireball_min=1` (36 matchs sur 52) lançait la Boule
+   de feu sur un Géant seul dès qu'un tireur existait AILLEURS sur le terrain. Vérifier ce que fait chaque variante
+   dans les journaux (`decisions.jsonl`), pas seulement son taux de victoire.
+2. Un seuil lu sur l'écran doit être atteignable : l'élixir se lit au plus ~9.5 -> `giant_elixir` 10 puis `cycle_at` 10
+   n'arrivaient jamais. Toujours comparer un seuil au maximum réellement mesuré.
+3. Les valeurs « niveau 1 » des fichiers du jeu sont au 1er niveau de CHAQUE rareté (rare = niveau 3, épique = 6) :
+   comparer des cartes demande de les ramener au même niveau.
+4. Une fonction de décision ne doit rien retenir : la boucle redécide à chaque image et ne joue qu'une décision sur
+   plusieurs (délai entre deux cartes). Mémoriser seulement ce qui est vraiment joué.
+5. Contre une unité qui ne vise que les bâtiments, « gagner le duel » est trivial : le vrai critère est le temps
+   avant qu'elle n'abîme la tour.
+6. Vitesse = positions HORODATÉES : le détecteur tourne aussi sur les rafales d'images pendant la pose d'une carte.
+7. Comparer des proportions de zones de tailles différentes fausse la comparaison (couronnes : égalités -> « victoire »).
+8. Un test doit d'abord ÉCHOUER sur l'ancien code : un test de tours avec une horloge factice (0-9 s) passait sur le
+   code bogué, parce que l'état initial utilise l'horloge réelle.
+9. Tout filtre « crédible / pas crédible » peut aveugler le cerveau (unités invoquées, évolutions, deck verrouillé
+   par des fantômes) : ne cacher une unité que si c'est vérifiable.
+10. L'avance d'élixir se compte main + TERRAIN : sans les troupes posées, l'IA se croyait « en retard » juste après
+    son Géant et ne le soutenait plus (135 soutiens supprimés au rejeu).
+12. Vérifier qu'une donnée existe VRAIMENT avant de bâtir dessus : la classe « tower-bar » vient de KataCR, notre YOLO
+    ne l'a pas (entraîné sans l'interface) -> une lecture basée dessus n'aurait jamais marché en match, alors que
+    les tests (fausses boîtes) passaient. Lister les classes du modèle (`YOLO(...).names`).
+13. Un test ne doit dépendre d'aucun chemin propre à une machine : le test « vrais matchs » visait un dossier du
+    conteneur -> toujours sauté ailleurs (CI comprise). Il extrait maintenant learning/games_logs.tgz.
+11. Un bilan d'échanges doit créditer chaque attaque adverse UNE fois : chaque carte posée contre le même Géant
+    « gagnait » 5 élixir (+371 fictifs sur 52 matchs).
+- Après une session de matchs : `python scripts/match_report.py` -> `runs/report.html` (victoires, élixir des deux camps
+  par match, décisions, ce que le bandit a appris). Pour les prochaines améliorations (chrono, détection, imitation) :
+  `python scripts/pack_samples.py` puis les commandes git qu'il affiche (captures + coups des vidéos -> learning/samples).
+- Fin de match par couronnes (`endgame`), sort qui achève une tour (`finish_towers`, lecture des PV auto-calibrée),
+  contre-attaque derrière nos survivants (`counter_support`) ; CI GitHub : tests à chaque PR.
+- Avance d'élixir (`edge_push`, bandit) : Géant plus tôt avec 3+ d'avance, pas d'attaque avec 3+ de retard.
+  Bilan des échanges estimé : à l'écran, dans `decisions.jsonl` (`trade`, `opp_elixir`) et `journal.jsonl`
+  (`trade_balance`) -> comparer bilan et victoires quand il y aura des matchs.
+
 ## Nuit du 25 au 26/09 (autonome, hors de Claude)
 - `scripts/night_detector.py` (PID 39148) : YOLO11s, 64 199 images (60 000 synthétiques + 4 199 réelles), 8 h max,
   puis note sur le test (séquences jamais vues ; KataCR : F1 0.916), export TensorRT et rapport

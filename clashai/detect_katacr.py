@@ -32,6 +32,8 @@ from katacr.yolov8.custom_result import CRResults  # noqa: E402
 from katacr.yolov8.custom_trackers import cr_on_predict_postprocess_end, cr_on_predict_start  # noqa: E402
 from katacr.yolov8.train import YOLO_CR  # noqa: E402
 
+from clashai.motion import Tracks  # noqa: E402
+
 DETECTORS = [ROOT / "models/katacr/detector1_v0.7.13.pt", ROOT / "models/katacr/detector2_v0.7.13.pt"]
 TRACKER_CFG = ROOT / "third_party/KataCR/katacr/yolov8/bytetrack.yaml"
 # Recadrage de l'arène dans l'écran (fractions x0, y0, largeur, hauteur) : même
@@ -39,7 +41,7 @@ TRACKER_CFG = ROOT / "third_party/KataCR/katacr/yolov8/bytetrack.yaml"
 ARENA = (0.020, 0.035, 0.960, 0.684)
 ARENA_SIZE = (568, 896)
 # Éléments d'interface détectés mais inutiles à afficher comme « unités »
-UI = {"bar", "bar-level", "tower-bar", "king-tower-bar", "dagger-duchess-tower-bar", "elixir",
+UI = {"bar", "bar-level", "tower-bar", "king-tower-bar", "dagger-duchess-tower-bar", "skeleton-king-bar", "elixir",
       "clock", "emote", "evolution-symbol", "ice-spirit-evolution-symbol"}
 UI |= {n for n in idx2unit.values() if n.startswith("padding")}
 
@@ -51,6 +53,9 @@ class Unit:
     enemy: bool
     conf: float
     box: tuple[int, int, int, int]   # x0, y0, x1, y1 dans l'image du flux
+    # vitesse en px/s de l'image du flux (x vers la droite, y vers le bas), du milieu du bas de la boîte, mesurée sur
+    # l'horloge réelle (clashai/motion.py) ; (0, 0) si non suivie ou trop récente
+    vel: tuple[float, float] = (0.0, 0.0)
 
     @property
     def center(self) -> tuple[int, int]:
@@ -71,6 +76,7 @@ class Detector:
             self.tracker_cfg_path = str(TRACKER_CFG)
             cr_on_predict_start(self, persist=True)   # crée self.tracker
         self.trails: dict[int, collections.deque] = {}
+        self.motion = Tracks()               # suivi -> vitesse mesurée sur ses positions horodatées
 
     def _crop(self, frame: np.ndarray) -> tuple[np.ndarray, tuple[float, float, float, float]]:
         h, w = frame.shape[:2]
@@ -79,12 +85,14 @@ class Detector:
         crop = cv2.resize(frame[y0:y1, x0:x1], ARENA_SIZE, interpolation=cv2.INTER_LINEAR)
         return crop, (x0, y0, (x1 - x0) / ARENA_SIZE[0], (y1 - y0) / ARENA_SIZE[1])
 
-    def __call__(self, frame: np.ndarray) -> list[Unit]:
+    def __call__(self, frame: np.ndarray, t: float | None = None) -> list[Unit]:
         crop, offset = self._crop(frame)
-        return self.on_arena(crop, offset)
+        return self.on_arena(crop, offset, t)
 
-    def on_arena(self, crop: np.ndarray, offset=(0, 0, 1.0, 1.0)) -> list[Unit]:
-        """Détecte sur une arène déjà recadrée en 568x896 ; offset replace les boîtes dans l'image source."""
+    def on_arena(self, crop: np.ndarray, offset=(0, 0, 1.0, 1.0), t: float | None = None) -> list[Unit]:
+        """Détecte sur une arène déjà recadrée en 568x896 ; offset replace les boîtes dans l'image source.
+        t : instant de l'image en s (vidéo, tests) ; par défaut l'horloge au moment de l'appel."""
+        now = time.perf_counter() if t is None else t
         ox, oy, sx, sy = offset
         preds = []
         for m in self.models:
@@ -108,18 +116,20 @@ class Detector:
                 continue
             box = (int(ox + row[0] * sx), int(oy + row[1] * sy), int(ox + row[2] * sx), int(oy + row[3] * sy))
             units.append(Unit(tid, name, bool(bel), float(conf), box))
-        self._update_trails(units)
+        self._update_trails(units, now)
         return units
 
-    def _update_trails(self, units: list[Unit]):
-        alive = set()
+    def _update_trails(self, units: list[Unit], now: float):
+        """Vitesses et traces des unités suivies ; gardées Tracks.KEEP_S s après la dernière image où l'unité est vue
+        (une unité ratée sur quelques images garde sa vitesse au lieu de repartir de zéro)."""
+        self.motion.forget(now)
+        self.motion.observe(units, now)
+        for tid in list(self.trails):
+            if tid not in self.motion:
+                del self.trails[tid]
         for u in units:
             if u.track_id >= 0:
-                alive.add(u.track_id)
                 self.trails.setdefault(u.track_id, collections.deque(maxlen=20)).append(u.center)
-        for tid in list(self.trails):
-            if tid not in alive:
-                del self.trails[tid]
 
 
 BLUE, RED = (255, 150, 30), (40, 40, 235)
