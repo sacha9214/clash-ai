@@ -86,8 +86,21 @@ class Agent:
         return units, d, info, hand, el
 
     def _show(self, img, units, d, info):
-        if self.show:
-            view = self.annotate(img, units, d, info)
+        """La fenêtre tourne dans son propre fil : si Windows la bloque (déplacement, clic), l'IA continue de jouer."""
+        if not self.show:
+            return
+        self._view = (img, units, d, info)
+        if not getattr(self, "_viewer", None):
+            self._viewer = threading.Thread(target=self._viewer_loop, daemon=True)
+            self._viewer.start()
+
+    def _viewer_loop(self):
+        while True:
+            job, self._view = getattr(self, "_view", None), None
+            if job is None:
+                time.sleep(0.01)
+                continue
+            view = self.annotate(*job)
             cv2.imshow("Clash AI", cv2.resize(view, (int(view.shape[1] * 1.25), int(view.shape[0] * 1.25))))
             cv2.waitKey(1)
 

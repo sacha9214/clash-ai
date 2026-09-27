@@ -214,7 +214,9 @@ def team_color(img: np.ndarray, box) -> int:
     +1 ennemi, -1 allié, 0 illisible. Sur nos captures : juste dans 5 désaccords sur 5 avec le détecteur."""
     x0, y0, x1, y1 = box
     h = y1 - y0
-    ya, yb = max(0, y0 - int(0.35 * h) - 6), max(1, y0 + int(0.25 * h))
+    # strictement AU-DESSUS de l'unité (badge de niveau + barre de vie) : pas sur l'unité, où l'horloge rouge du
+    # déploiement ferait croire à un ennemi
+    ya, yb = max(0, y0 - int(0.35 * h) - 8), max(1, y0 + int(0.05 * h))
     xa, xb = max(0, x0 - 4), min(img.shape[1], x1 + 4)
     if yb <= ya or xb <= xa:
         return 0
