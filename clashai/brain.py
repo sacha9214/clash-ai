@@ -566,18 +566,6 @@ class Brain:
                 return Decision(card, playable[card], *center,
                                 f"{card} sur un groupe de {n} ({value:.1f} élixir détruits)", precise=True,
                                 trade=round(value - DECK[card].cost, 2))
-            def worth_alone() -> bool:
-                """Sort sur UNE cible : seulement s'il la tue (presque), d'après la base des cartes (dégâts du sort
-                vs PV de l'unité, même niveau), ou s'il touche aussi une tour ennemie. Jamais sur un Géant seul."""
-                dmg = (card_info.db().get(card, {}).get("spell") or {}).get("damage_lvl1") or 0
-                near = [e for e in pool if _tile_dist(e.x, e.y, *center) < r]
-                if not near:
-                    return False
-                kills = dmg >= 0.9 * card_info.combat(near[0].name)["hp"]
-                hits_tower = any(_tile_dist(center[0], center[1], lx, ENEMY_TOWER_Y) < r for lx in LANES_X)
-                return kills or hits_tower
-            if best >= min_count and (best >= 2 or worth_alone()):
-                return Decision(card, playable[card], *center, f"{card} sur un groupe de {best}")
         return None
 
     def _future(self, u: Seen, t: float) -> tuple[float, float]:
