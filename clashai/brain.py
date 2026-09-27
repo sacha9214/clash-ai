@@ -160,6 +160,7 @@ class Brain:
         self._ours: list[Seen] = []
         self.match = None                        # towers.MatchState : PV de nos tours, tours ennemies, phase
         self.last_own_play: tuple[int, float] | None = None   # (couloir, instant) de notre dernière troupe
+        self.virtual: list[dict] = []            # nos troupes posées, suivies de mémoire si le détecteur les rate
         # « où poser » appris sur les coups des pros (clashai/placement.py) ; les règles gardent « quand » et « quoi »
         self.placer = None
         if self.p.get("placement_model"):
@@ -187,6 +188,29 @@ class Brain:
             out.append(Seen(u.name, u.enemy, x, y, vx, vy))
         return out
 
+    def _virtual_units(self, seen: list[Seen], now: float) -> list[Seen]:
+        """Nos unités posées que le détecteur ne voit pas (ex. nos Archères, mal reconnues sur notre écran) :
+        l'IA sait où elle les a posées ; elle les fait avancer vers l'ennemi à la vitesse réelle de la carte,
+        s'arrêter quand un ennemi est à leur portée, et les oublie dès que le détecteur les voit (ou après 14 s)."""
+        out, keep = [], []
+        for v in self.virtual:
+            if now > v["until"]:
+                continue
+            seen_real = any(not s.enemy and s.name == v["name"] and _tile_dist(s.x, s.y, v["x"], v["y"]) < 2.5
+                            for s in seen)
+            if seen_real and now - v["t"] > 1.2:
+                continue                               # le détecteur la voit : la vraie détection prend le relais
+            if now > v["last"]:
+                dt, v["last"] = now - v["last"], now
+                enemy_near = any(s.enemy and _tile_dist(s.x, s.y, v["x"], v["y"]) <= v["range"] + 1 for s in seen)
+                if not enemy_near and v["y"] > ENEMY_TOWER_Y + 0.02:
+                    v["y"] -= v["speed"] * dt          # avance vers la tour ennemie
+            keep.append(v)
+            if not seen_real:
+                out.append(Seen(v["name"], False, v["x"], v["y"]))
+        self.virtual = keep
+        return out
+
     # ---- décision ----
     def decide(self, seen: list[Seen], hand: list[str | None], ready: list[bool], elixir: float,
                now: float) -> Decision | None:
@@ -197,6 +221,7 @@ class Brain:
                 if s.enemy and s.y > RIVER_Y and any(s.name in names and _tile_dist(s.x, s.y, x, y) < 3
                                                      for names, x, y, _ in self.own_recent) else s
                 for s in seen]
+        seen = seen + self._virtual_units(seen, now)
         self._ours = [s for s in seen if not s.enemy]
         d = self._decide(seen, hand, ready, elixir, now)
         if d is None:
@@ -215,6 +240,14 @@ class Brain:
             # le jeu pose au centre d'une case : on vise ce centre (et on reste hors des tours)
             d.x, d.y = PHONE.snap(*_clamp_own(*PHONE.snap(d.x, d.y)))
             self.own_recent.append((DECK[d.card].units, d.x, d.y, now))
+            if DECK[d.card].kind == "troop":
+                st = card_info.combat(d.card)
+                for i in range(min(st["count"], 3)):
+                    off = (i - (min(st["count"], 3) - 1) / 2) * 0.6 * PHONE.tw
+                    self.virtual.append({"name": DECK[d.card].units[0] if DECK[d.card].units else d.card,
+                                         "x": d.x + off, "y": d.y, "t": now, "last": now + 1.0,   # déploiement ~1 s
+                                         "speed": (card_info.info(d.card)["speed"] or 1.0) * PHONE.th,
+                                         "range": st["range"], "until": now + 14})
             if abs(d.x - 0.5) > 0.06:                                  # pas une carte posée au centre
                 self.last_own_play = (_lane(d.x), now)
         d.tile = PHONE.cell(d.x, d.y)
