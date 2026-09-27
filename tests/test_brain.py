@@ -450,3 +450,11 @@ def test_waits_a_moment_for_valkyrie_against_a_crowd():
     seen = [enemy("barbarian", 3, 20 + i % 2) for i in range(5)]
     d = b.decide(seen, ["musketeer", "mini-pekka", "valkyrie", "knight"], ALL, 3.0, 100.0)
     assert d is None
+
+
+def test_our_musketeer_hitting_his_tower_is_not_defended():
+    b = brain()
+    b.opp_deck = ["dark-prince", "hog-rider", "valkyrie", "knight"]
+    b.played(Decision("musketeer", 0, *at(3, 24), "test"), 80.0)
+    d = b.decide([enemy("musketeer", 3, 13, vy_tiles=0.2)], ["knight", "cannon", "minions", "fireball"], ALL, 8.0, 100.0)
+    assert d is None or not d.reason.startswith("défense : musketeer")

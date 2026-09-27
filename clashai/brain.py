@@ -315,7 +315,7 @@ class Brain:
                 s = Seen(s.name, False, s.x, s.y, s.vx, s.vy)
             elif (s.enemy and base in own_units and len(self.opp_deck) >= 4
                   and unit_card.get(base) not in self.opp_deck
-                  and now - self.own_played.get(base, -1e9) < OWN_UNIT_LIFE_S and s.vy <= 0):
+                  and now - self.own_played.get(base, -1e9) < OWN_UNIT_LIFE_S):   # immobile en frappant une tour : sans condition de vitesse
                 # « ennemie » d'une carte qu'il n'a pas, qu'on vient de jouer, et qui monte vers ses tours :
                 # c'est la nôtre (27/09 : nos Gargouilles prises pour des ennemies -> Mousquetaire gâchée)
                 s = Seen(s.name, False, s.x, s.y, s.vx, s.vy)
