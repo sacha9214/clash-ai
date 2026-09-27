@@ -473,3 +473,32 @@ def test_our_giant_walking_up_our_half_read_as_enemy_is_ours():
     b.virtual.clear()
     d = b.decide([enemy("giant", 3, 18, vy_tiles=-0.6)], ["cannon", "minions", "knight", "fireball"], ALL, 8.0, 100.0)
     assert d is None or not d.reason.startswith("défense : giant")
+
+
+# ---- revue du 27/09 soir ----
+def test_three_minions_at_our_tower_are_defended():
+    # 90 PV chacune : la tour ne les tue pas en 1 coup (3 x 46 dégâts/s) -> on défend
+    seen = [enemy("minion", 3 + i % 2, 22 + i // 2) for i in range(3)]
+    d = brain().decide(seen, ["musketeer", "knight", "giant", "cannon"], ALL, 6.0, 100.0)
+    assert d is not None and d.reason.startswith(("défense", "fireball"))
+
+
+def test_two_skeletons_still_left_to_the_tower():
+    seen = [enemy("skeleton", 3, 22), enemy("skeleton", 4, 22)]
+    assert brain().decide(seen, ["musketeer", "knight", "giant", "cannon"], ALL, 6.0, 100.0) is None
+
+
+def test_first_real_goblin_barrel_answered_with_six_cards_known():
+    b = brain()
+    b.opp_deck = ["knight", "giant", "musketeer", "minions", "valkyrie", "cannon"]   # 6 connues, pas le Tonneau
+    barrel = Seen("goblin-barrel", True, *at(3, 24))
+    d = b.decide([barrel], ["valkyrie", "knight", "giant", "cannon"], ALL, 6.0, 100.0)
+    assert d is not None and d.card == "valkyrie"
+
+
+def test_his_first_mirror_knight_in_the_other_lane_stays_enemy():
+    b = brain()
+    b.opp_deck = ["giant", "musketeer", "minions", "valkyrie"]
+    b.played(Decision("knight", 0, *at(3, 24), "défense : x"), 90.0)      # notre Chevalier, couloir gauche
+    s = b._fix_sides([enemy("knight", 14, 20, vy_tiles=1.0)], 100.0)       # le sien, couloir droit
+    assert len(s) == 1 and s[0].enemy

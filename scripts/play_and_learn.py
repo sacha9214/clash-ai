@@ -85,8 +85,8 @@ def finetune(minutes: float) -> None:
         (FT / sub).mkdir(parents=True)
     random.seed(len(mine))
     # nos images validées x3 + un échantillon des images habituelles (pour ne rien oublier du reste)
-    others = random.sample(sorted((DATA / "images/train").glob("*.jpg")), 3000) + \
-        random.sample(sorted((DATA / "images/train_fk").glob("fk_*.jpg")), 1500)
+    pool, fk = sorted((DATA / "images/train").glob("*.jpg")), sorted((DATA / "images/train_fk").glob("fk_*.jpg"))
+    others = random.sample(pool, min(3000, len(pool))) + random.sample(fk, min(1500, len(fk)))
     for rep in range(3):
         for img in mine:
             shutil.copy(img, FT / "images/train" / f"r{rep}_{img.name}")
@@ -128,8 +128,12 @@ def finetune(minutes: float) -> None:
     if ok:
         for ext in (".pt", ".engine"):
             shutil.copy(MODELS / f"clashai_yolo11s{ext}", MODELS / f"clashai_yolo11s_prev{ext}")
-        shutil.copy(best, MODELS / "clashai_yolo11s.pt")
-        shutil.copy(new, MODELS / "clashai_yolo11s.engine")
+        # copie à côté puis remplacement : jamais un .pt neuf avec l'ancien .engine si une copie échoue en route
+        for src, ext in ((new, ".engine"), (best, ".pt")):
+            tmp = MODELS / f"clashai_yolo11s.tmp{ext}"
+            shutil.copy(src, tmp)
+        for ext in (".engine", ".pt"):
+            os.replace(MODELS / f"clashai_yolo11s.tmp{ext}", MODELS / f"clashai_yolo11s{ext}")
 
 
 def main():
