@@ -203,9 +203,9 @@ def _simulate(chooser, seed, param, good, games=150, last=50):
 @pytest.mark.parametrize("param,good", [("giant_spot", "mid"), ("cycle_at", 8.0), ("counter_push", False)])
 def test_factorized_learns_faster_than_whole_combinations(param, good):
     assert good != ST.DEFAULT[param]
-    seeds = range(3)
+    seeds = range(10)                            # 3 graines : trop de bruit (moyenne 0.79 ou 0.84 selon les tirages)
     new = [_simulate(lambda s, r: ST.choose(s, rng=r), seed, param, good) for seed in seeds]
     old = [_simulate(_old_choose, seed, param, good) for seed in seeds]
     assert min(new) >= 0.6, new                  # la bonne valeur est jouée la plupart du temps
-    assert sum(new) / 3 >= 0.8, new
-    assert sum(new) / 3 > sum(old) / 3 + 0.15, (new, old)
+    assert sum(new) / len(new) >= 0.8, new
+    assert sum(new) / len(new) > sum(old) / len(old) + 0.15, (new, old)

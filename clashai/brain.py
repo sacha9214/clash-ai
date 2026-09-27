@@ -60,6 +60,8 @@ WIN_CONDITIONS = {"giant", "hog-rider", "royal-giant", "golem", "pekka", "balloo
 OWN_UNIT_LIFE_S = 40.0
 TOWER_DPS = 60.0                            # tour princesse, niveau 1 (même échelle que card_info.combat)
 TOWER_RANGE_TILES = 7.5
+# fin de match : 30 dernières secondes du temps réglementaire (3:00), puis prolongation = mort subite
+LATE_S, REGULATION_S = 150.0, 180.0
 PUSH_MEMORY_S = 8.0                         # défenses contre la même attaque adverse : créditée une fois
 TANK_DEADLINE_S = 12.0                      # un tank qui vise les bâtiments, du pont à notre tour : ~9 s de marche + 1er coup
 # Valeur d'un sort (élixir détruit) : une unité sur notre moitié frappe déjà nos tours/troupes -> compte plus ;
@@ -427,6 +429,23 @@ class Brain:
         k = self.p.get("edge_push", 0)
         return (0 if not k else 1 if gap >= k else -1 if gap <= -k else 0), gap
 
+    def _endgame(self, now: float) -> str | None:
+        """Fin de match selon les couronnes (towers.MatchState) : en tête dans les 30 dernières secondes -> on défend ;
+        mené -> tout pour l'attaque ; prolongation (couronnes égales, la 1re tour qui tombe gagne) -> mort subite."""
+        if not self.p.get("endgame") or self.match is None:
+            return None
+        t = self.match.elapsed(now)
+        if t < LATE_S:
+            return None
+        ours, theirs = self.match.crowns(now)
+        if t >= REGULATION_S and ours == theirs:
+            return "mort subite"
+        if ours > theirs:
+            return "défendre l'avance"
+        if ours < theirs:
+            return "tout pour l'attaque"
+        return None
+
     @property
     def trade_balance(self) -> float:
         """Bilan des échanges d'élixir du match (estimé à chaque défense / sort joué)."""
@@ -689,8 +708,10 @@ class Brain:
         fast = self.match is not None and self.match.phase(now) != "normal"   # l'élixir revient 2x plus vite
         # punir : l'adversaire vient de dépenser, il ne peut pas bien défendre tout de suite
         punish = self.p.get("punish_low_elixir") and self.opp_elixir < 3 and elixir >= 5
+        mode = self._endgame(now)
         # il vient de poser une carte lourde : il est à sec, on frappe tout de suite dans l'AUTRE couloir
-        if self.p.get("punish_opposite") and now - self.opp_heavy_t < 4 and elixir >= 4:
+        if (self.p.get("punish_opposite") and mode != "défendre l'avance" and now - self.opp_heavy_t < 4
+                and elixir >= 4):
             for card in ("mini-pekka", "knight"):
                 if card in playable:
                     lane = self._weak_lane(seen)
@@ -709,6 +730,12 @@ class Brain:
             giant_at = min(giant_at, 6)      # il ne peut pas tout défendre : on attaque dès qu'on peut suivre
         elif edge < 0:
             giant_at = max(giant_at, 9)      # en retard : on défend à l'économie, pas d'attaque
+        if mode == "défendre l'avance":
+            playable = {c: i for c, i in playable.items() if c != "giant"}   # plus d'attaque : on garde nos couronnes
+        elif mode == "tout pour l'attaque":
+            giant_at = min(giant_at, 5)      # mené, peu de temps : chaque seconde sans pression est perdue
+        elif mode == "mort subite":
+            giant_at = min(giant_at, 7)      # la première tour qui tombe gagne
         if elixir >= self._cycle_at(now):
             giant_at = min(giant_at, elixir)  # jamais d'élixir perdu, même en retard
         if "giant" in playable and (elixir >= giant_at or punish):
@@ -722,7 +749,8 @@ class Brain:
                 lx = 0.5 + (-0.12 if lane == 0 else 0.12)   # juste derrière le Roi, du côté du couloir visé
             x, y = _clamp_own(lx, {"king": 0.69, "back": 0.69, "corner": 0.69, "mid": 0.55, "bridge": 0.47}.get(spot, 0.69))
             countered_out = self.p.get("giant_when_counter_out") and known and not known & set(self.opp_hand)
-            why = "l'ennemi est à sec" if punish and elixir < giant_at else \
+            why = mode if mode and elixir < self.p["giant_elixir"] else \
+                "l'ennemi est à sec" if punish and elixir < giant_at else \
                 f"avance d'élixir {gap:+.1f}" if edge > 0 and elixir < self.p["giant_elixir"] else \
                 "ses contres sont joués" if countered_out and elixir < self.p["giant_elixir"] else \
                 "double élixir" if fast and elixir < self.p["giant_elixir"] else \
@@ -736,7 +764,9 @@ class Brain:
         # soutien derrière notre Géant pendant qu'il avance
         ours = [s for s in seen if not s.enemy and s.name == "giant"]
         support_at = self.p["support_min_elixir"] + (-1 if edge > 0 else 2 if edge < 0 else 0)
-        if ours and elixir >= support_at:
+        if mode in ("tout pour l'attaque", "mort subite"):
+            support_at = min(support_at, 3)
+        if ours and elixir >= support_at and mode != "défendre l'avance":
             g = ours[0]
             order = ["musketeer", "archers", "valkyrie", "mini-pekka", "minions"]
             if set(self.opp_hand) & SMALL_SPELLS:

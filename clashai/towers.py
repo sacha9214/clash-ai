@@ -22,6 +22,8 @@ DOUBLE_ELIXIR_S, OVERTIME_S = 120.0, 180.0
 # passaient pour détruites au bout de 3 s
 PRINCESS_TOWERS = {"queen-tower", "cannoneer-tower", "dagger-duchess-tower"}
 DESTROYED_AFTER_S = 6.0      # barre basse puis illisible aussi longtemps : la tour est tombée
+CROWN_AFTER_S = 6.0          # tour ennemie absente aussi longtemps : couronne pour nous (3 s ne suffit pas pour décider
+                             # de ne plus attaquer : une tour masquée par des unités ne doit pas nous faire croire en tête)
 
 
 def bar_fraction(img: np.ndarray, x0f: float, x1f: float, yf: float) -> float | None:
@@ -71,6 +73,13 @@ class MatchState:
     def phase(self, now: float | None = None) -> str:
         t = self.elapsed(now)
         return "normal" if t < DOUBLE_ELIXIR_S else "double" if t < OVERTIME_S else "overtime"
+
+    def crowns(self, now: float | None = None) -> tuple[int, int]:
+        """(nos couronnes, les siennes) : ses tours princesses tombées, les nôtres à 0 PV."""
+        now = time.time() if now is None else now
+        ours = sum(now - self._enemy_seen[lane] > CROWN_AFTER_S for lane in (0, 1))
+        theirs = sum(self.our_hp[lane] <= 0.0 for lane in (0, 1))
+        return ours, theirs
 
     def summary(self) -> str:
         down = [("G", "D")[l] for l in (0, 1) if not self.enemy_alive[l]]

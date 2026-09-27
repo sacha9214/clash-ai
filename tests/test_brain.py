@@ -258,3 +258,50 @@ def test_trade_mini_pekka_on_giant_and_push_credited_once():
     d2 = Decision("knight", 1, *at(3, 22), "défense : giant -> knight", trade=2.0, push=5.0)
     b.played(d2, 103.0)                                  # 2e carte contre le même Géant : l'attaque est déjà comptée
     assert b.trade_balance == pytest.approx(5.0 - 3.0, abs=0.01)
+
+
+# ---- fin de match selon les couronnes ----
+from clashai.towers import MatchState  # noqa: E402
+
+
+def _match(elapsed, ours=0, theirs=0, now=1000.0):
+    m = MatchState(start=now - elapsed)
+    m._enemy_seen = {lane: (now - 10 if lane < ours else now) for lane in (0, 1)}     # tour absente 10 s = tombée
+    m.our_hp = {lane: (0.0 if lane < theirs else 0.8) for lane in (0, 1)}
+    return m
+
+
+HAND = ["giant", "arrows", "fireball", "cannon"]
+
+
+def test_leading_late_stops_attacking():
+    b = brain(endgame=True, edge_push=0, giant_elixir=7)
+    b.match = _match(160, ours=1)
+    d = b.decide([], HAND, ALL, 8.0, 1000.0)
+    assert d is None or d.card != "giant"
+    b.match = _match(100, ours=1)                          # pas encore la fin : on attaque normalement
+    assert b.decide([], HAND, ALL, 8.0, 1000.0).card == "giant"
+
+
+def test_trailing_late_goes_all_in():
+    b = brain(endgame=True, edge_push=0, giant_elixir=9)
+    b.match = _match(165, theirs=1)
+    d = b.decide([], HAND, ALL, 5.5, 1000.0)
+    assert d is not None and d.card == "giant" and "attaque" in d.reason
+    b0 = brain(endgame=False, edge_push=0, giant_elixir=9)
+    b0.match = _match(165, theirs=1)
+    assert b0.decide([], HAND, ALL, 5.5, 1000.0) is None
+
+
+def test_overtime_is_sudden_death():
+    b = brain(endgame=True, edge_push=0, giant_elixir=9)
+    b.match = _match(200)
+    assert b._endgame(1000.0) == "mort subite"
+    d = b.decide([], HAND, ALL, 7.2, 1000.0)
+    assert d is not None and d.card == "giant"
+
+
+def test_hidden_enemy_tower_is_not_a_crown_too_soon():
+    m = _match(160)
+    m._enemy_seen[0] = 1000.0 - 4                          # masquée 4 s par des unités : pas encore une couronne
+    assert m.crowns(1000.0) == (0, 0)
