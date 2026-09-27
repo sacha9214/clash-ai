@@ -58,6 +58,10 @@ WIN_CONDITIONS = {"giant", "hog-rider", "royal-giant", "golem", "pekka", "balloo
 # Une de « nos » unités de l'autre côté de la rivière sans qu'on ait posé cette carte depuis ce délai : le détecteur
 # s'est trompé de camp (match du 25/09 : Géant ennemi vu « à nous » -> « soutien derrière le Géant » fantôme)
 OWN_UNIT_LIFE_S = 40.0
+# unité lue -> (sa carte, unité qu'elle est probablement, carte de celle-ci) : confusions vues sur nos matchs
+ALIAS = {"pekka": ("pekka", "mini-pekka", "mini-pekka"), "mini-pekka-hero": ("mini-pekka", "mini-pekka", "mini-pekka"),
+         "golden-knight": ("golden-knight", "knight", "knight"), "barbarian": ("barbarians", "knight", "knight"),
+         "knight": ("knight", "barbarian", "barbarians")}
 TOWER_DPS = 60.0                            # tour princesse, niveau 1 (même échelle que card_info.combat)
 TOWER_RANGE_TILES = 7.5
 # fin de match : 30 dernières secondes du temps réglementaire (3:00), puis prolongation = mort subite
@@ -287,6 +291,13 @@ class Brain:
         unit_card = {u: c.name for c in DECK.values() for u in c.units}
         # même unité vue DEUX fois (à nous + ennemie) au même endroit : le double « ennemi » est un fantôme
         # (27/09 : notre Géant doublé d'un Géant ennemi -> Canon et Gargouilles contre notre propre Géant)
+        # confusions fréquentes du scanner : un nom absent de son deck connu, dont le « voisin » y est -> le voisin
+        # (27/09 : son Mini P.E.K.K.A lu « P.E.K.K.A » 10 fois -> menace surestimée)
+        if len(self.opp_deck) >= 4:
+            deck = set(self.opp_deck)
+            seen = [Seen(ALIAS[s.name][1], s.enemy, s.x, s.y, s.vx, s.vy)
+                    if s.enemy and s.name in ALIAS and ALIAS[s.name][0] not in deck and ALIAS[s.name][2] in deck else s
+                    for s in seen]
         mine = [s for s in seen if not s.enemy]
         seen = [s for s in seen if not (s.enemy and s.name in own_units
                                         and any(m.name == s.name and _tile_dist(s.x, s.y, m.x, m.y) < 2.5 for m in mine))]

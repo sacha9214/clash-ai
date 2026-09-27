@@ -436,3 +436,10 @@ def test_duplicate_enemy_copy_of_our_giant_is_ignored():
     b = brain()
     d = b.decide([ours("giant", 3, 20), enemy("giant", 3, 20)], ["cannon", "minions", "knight", "fireball"], ALL, 8.0, 100.0)
     assert d is None or not d.reason.startswith("défense : giant")
+
+
+def test_pekka_read_as_his_mini_pekka_when_he_has_no_pekka():
+    b = brain()
+    b.opp_deck = ["mini-pekka", "giant", "minions", "zap"]
+    d = b.decide([enemy("pekka", 3, 22)], ["knight", "cannon", "minions", "fireball"], ALL, 8.0, 100.0)
+    assert d is None or "pekka x" not in d.reason.replace("mini-pekka", "")
