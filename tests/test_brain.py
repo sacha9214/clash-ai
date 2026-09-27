@@ -416,3 +416,11 @@ def test_no_cannon_against_minions_even_with_a_ground_unit_nearby():
     seen = [enemy("minion", 3, 24), enemy("minion", 4, 24), enemy("goblin", 4, 23)]
     d = b.decide(seen, ["cannon", "knight", "giant", "fireball"], ALL, 8.0, 100.0)
     assert d is None or d.card not in ("cannon",) or "goblin" in d.reason
+
+
+def test_our_fresh_minions_misread_as_enemy_are_ours():
+    b = brain()
+    b.played(Decision("minions", 0, *at(4, 20), "test"), 96.0)
+    d = b.decide([enemy("minion", 4, 19), enemy("minion", 5, 19)], ["knight", "valkyrie", "cannon", "fireball"],
+                 ALL, 8.0, 100.0)
+    assert d is None or not d.reason.startswith("défense : minion")

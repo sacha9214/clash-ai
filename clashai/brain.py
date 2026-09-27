@@ -292,6 +292,11 @@ class Brain:
                                                  for names, x, y, _ in self.own_recent):
                 # NOTRE unité fraîchement posée prise pour une ennemie (ex. notre Géant « ennemi » sur sa case de pose)
                 s = Seen(s.name, False, s.x, s.y, s.vx, s.vy)
+            elif s.enemy and any(v["name"] == base and now - v["t"] < 10 and _tile_dist(s.x, s.y, v["x"], v["y"]) < 4
+                                 for v in self.virtual):
+                # là où NOTRE troupe de même nom doit être (suivie de mémoire depuis sa pose, à sa vitesse) :
+                # c'est la nôtre (27/09 : nos Gargouilles vues « ennemies » 4 s après la pose -> Chevalier gâché)
+                s = Seen(s.name, False, s.x, s.y, s.vx, s.vy)
             elif (s.enemy and base in own_units and len(self.opp_deck) >= 4
                   and unit_card.get(base) not in self.opp_deck
                   and now - self.own_played.get(base, -1e9) < OWN_UNIT_LIFE_S and s.vy <= 0):

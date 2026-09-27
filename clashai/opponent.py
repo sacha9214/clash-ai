@@ -162,6 +162,12 @@ class Opponent:
         """Nous venons de lancer un sort (card : son nom) : ses images ne sont pas des cartes à lui."""
         self.our_spells = [s for s in self.our_spells if now - s[0] < OUR_SPELL_S + 1] + [(now, x, y, card)]
 
+    def note_our_troop(self, now: float, card: str) -> None:
+        """Nous venons de poser cette carte : une « ennemie » de la même carte dans les 12 s qui suivent,
+        alors qu'il ne l'a jamais jouée, est notre troupe mal lue (27/09 : nos Gargouilles comptées chez lui)."""
+        self.our_troops = {c: t for c, t in getattr(self, "our_troops", {}).items() if now - t < 12}
+        self.our_troops[card] = now
+
     def update(self, units, now: float | None = None, frame_h: int = 1280) -> list[str]:
         """Met à jour avec les unités détectées. Renvoie les cartes que l'ennemi vient de poser.
 
@@ -241,6 +247,8 @@ class Opponent:
         if name not in UNIT2CARD or name in SPAWNED or name in c.near:
             return None                              # pas une carte, ou sortie d'un générateur tout proche
         card = UNIT2CARD[name][0]
+        if card not in self.played and now - getattr(self, "our_troops", {}).get(card, -1e9) < 12:
+            return None                              # notre carte de la même sorte, posée à l'instant
         if self._spawned(name, now):
             return None                              # un générateur de son deck est là : ce n'est pas une pose
         # le suivi perd parfois une unité et lui redonne un nouveau numéro : même carte ennemie vue tout près
