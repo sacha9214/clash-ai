@@ -554,8 +554,8 @@ def test_no_cycling_below_the_giant_threshold():
 
 def test_musketeer_preferred_over_an_equal_winner():
     b = brain()
-    d = b.decide([enemy("mini-pekka", 3, 21)], ["musketeer", "knight", "minions", "cannon"], ALL, 8.0, 100.0)
-    assert d is not None and d.card in ("musketeer", "cannon")
+    d = b.decide([enemy("wizard", 3, 21)], ["musketeer", "knight", "minions", "cannon"], ALL, 8.0, 100.0)
+    assert d is not None and d.card in ("musketeer", "cannon")   # jamais les Gargouilles : le Sorcier les souffle
 
 
 def test_cannon_always_close_to_the_river_to_pull():
@@ -654,3 +654,9 @@ def test_minions_never_sent_on_a_wizard_even_as_fallback():
         b = brain()
         d = b.decide([enemy("wizard", 3, 21)], hand, ALL, 5.0, 100.0)
         assert d is None or d.card != "minions", hand
+
+
+def test_minions_first_against_a_pekka():
+    b = brain()
+    d = b.decide([enemy("pekka", 3, 21)], ["cannon", "knight", "minions", "fireball"], ALL, 8.0, 100.0)
+    assert d is not None and d.card == "minions"

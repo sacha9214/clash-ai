@@ -856,6 +856,15 @@ class Brain:
         push_cost = sum(_cost(n) for n in {s.name for s in threats if math.hypot(s.x - t.x, s.y - t.y) < 0.2})
         group = [s for s in threats if _tile_dist(s.x, s.y, t.x, t.y) < 4]
         near_tower = t.y > OWN_TOWER_Y - 0.1
+        # une troupe VOLANTE que la menace ne peut pas toucher, et qui gagne : réponse parfaite, avant le Canon
+        # (29/09 : P.E.K.K.A défendu 5 fois au Canon + Chevalier alors que nos Gargouilles le tuent sans perte)
+        if not is_air and not any(card_info.combat(g.name)["hits_air"] for g in group):
+            immune = {c: i for c, i in playable.items() if c in DECK and DECK[c].kind == "troop"
+                      and card_info.combat(c)["flying"] and (self._duel(c, group, near_tower) or (False,))[0]}
+            if immune:
+                d = self._stat_pick(t, threats, immune, push_cost)
+                if d:
+                    return d
         if self.evo_musketeer() and "musketeer" in playable and len(group) >= 2 and not is_air and t.name != "balloon":
             # Mousquetaire ÉVOLUÉE avant le Canon : ses 3 tirs de sniper percent toute la file (tank + soutien)
             lane_x = LANES_X[_lane(t.x)]
