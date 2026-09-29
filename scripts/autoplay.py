@@ -93,6 +93,14 @@ def wait_end_screen(dev, timeout=END_WAIT_S):
     return None
 
 
+def back() -> None:
+    """Touche Retour d'Android : ferme la Route des trophées et les menus ouverts par erreur."""
+    import subprocess
+    from clashai.device import ADB
+    subprocess.run([ADB, "shell", "input", "keyevent", "KEYCODE_BACK"], timeout=10,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--games", type=int, default=5)
@@ -158,7 +166,10 @@ def main():
                 taps = getattr(dev, "_reward_taps", 0)
                 dev._reward_taps = taps + 1
                 # + le bouton OK tout en bas (nouvelle arène : écran pris pour un coffre, bloqué 50 min le 27/09)
-                dev.tap(*B.px(img, 0.5, (0.42, 0.66, 0.966)[taps % 3]))
+                if taps % 4 == 3:
+                    back()          # Route des trophées : les taps ne la ferment pas, la touche Retour oui (29/09 : 6 min bloqué)
+                else:
+                    dev.tap(*B.px(img, 0.5, (0.42, 0.66, 0.966)[taps % 4]))
                 time.sleep(1.3)
                 unknown_since = None
             else:
@@ -168,6 +179,8 @@ def main():
                 waited = time.time() - unknown_since
                 if waited > 10 and int(waited) % 10 == 0:
                     dev.tap(*B.px(img, 0.5, 0.966))
+                    if int(waited) % 20 == 0:
+                        back()      # écran inconnu (Route des trophées, menu ouvert…) : Retour le ferme
                     time.sleep(1.0)
                 if time.time() - unknown_since > 45:   # matchmaking dure rarement plus
                     cv2.imwrite(os.path.join(a.out, "unknown.jpg"), img)
