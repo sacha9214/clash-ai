@@ -56,7 +56,36 @@ def main():
                   f"pire {max(p['loop_ms'] for p in P)} ms")
     reasons = collections.Counter(r["reason"].split(" ->")[0].split(" (")[0].split(" [")[0] for r in L)
     print("raisons principales :", reasons.most_common(6))
+    spells_review(g)
     lessons(g, res, L, ghosts)
+
+
+def spells_review(g) -> None:
+    """Chaque sort : ce qui était visé au tir, ce qui était VRAIMENT dans le rayon à l'impact -> bon / moyen / raté."""
+    import re
+    f = g / "spells.jsonl"
+    if not f.exists():
+        return
+    rows = [json.loads(l) for l in open(f, encoding="utf-8") if l.strip()]
+    rows = [r for r in rows if "aimed" in r]
+    if not rows:
+        return
+    cost = {"fireball": 4, "arrows": 3}
+    good = bad = 0
+    print("sorts (visé au tir -> réel à l'impact) :")
+    for r in rows:
+        m = re.search(r"groupe de (\d+) \(([\d.]+) élixir", r.get("aimed", ""))
+        aim = f"{m.group(1)} unités / {m.group(2)} élixir" if m else (r.get("aimed", "")[:40] or "?")
+        if r.get("hit") is None:
+            verdict, got = "? impact non vu", "?"
+        else:
+            v, c = r["hit_value"], cost.get(r["card"], 4)
+            got = f"{len(r['hit'])} unités / {v} élixir ({', '.join(sorted(set(r['hit']))) or 'rien'})"
+            verdict = "BON" if v >= c else "moyen" if v >= 0.5 * c else "RATÉ"
+            good, bad = good + (v >= c), bad + (v < 0.5 * c)
+        print(f"   {r['card']:8} visé {aim:28} -> {got}  : {verdict}")
+    print(f"   bilan sorts : {good} bons, {bad} ratés sur {len(rows)}")
+
 
 
 def lessons(g, res: dict, L: list[dict], ghosts) -> None:

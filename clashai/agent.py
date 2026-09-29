@@ -131,12 +131,24 @@ class Agent:
         h, w = img.shape[:2]
         for sp in list(self.spells_pending):
             if now - sp["t_tap"] > 4:
-                self.spells_pending.remove(sp)            # jamais vu : on abandonne
+                self.spells_pending.remove(sp)            # jamais vu : on abandonne (noté quand même)
+                self.spells_log.append({"card": sp["card"], "t": round(sp["t_tap"], 2), "aimed": sp.get("reason", ""),
+                                        "hit": None, "hit_value": None})
                 continue
             for u in units:
                 if u.name == sp["card"] and _tile_dist(u.center[0] / w, u.center[1] / h, sp["x"], sp["y"]) < 4:
+                    # ce qui est VRAIMENT dans le rayon quand le sort tombe (vs ce qui était visé au tir)
+                    from clashai import card_info
+                    from clashai.opponent import UNIT2CARD
+                    r = card_info.spell_radius(sp["card"]) + 0.5
+                    ix, iy = u.center[0] / w, u.center[1] / h
+                    hit = [e.name for e in units if e.enemy and e.name != sp["card"] and e.name in UNIT2CARD
+                           and _tile_dist(e.center[0] / w, e.center[1] / h, ix, iy) <= r]
+                    value = sum(UNIT2CARD[n][1] / max(UNIT2CARD[n][2], 1) for n in hit)   # élixir par unité touchée
                     self.spells_log.append({"card": sp["card"], "flight_s": round(now - sp["t_tap"], 2),
-                                            "dist_tiles": round(_tile_dist(sp["x"], sp["y"], 0.5, KING_Y), 1)})
+                                            "dist_tiles": round(_tile_dist(sp["x"], sp["y"], 0.5, KING_Y), 1),
+                                            "t": round(sp["t_tap"], 2), "aimed": sp.get("reason", ""),
+                                            "hit": hit, "hit_value": round(value, 1)})
                     self.spells_pending.remove(sp)
                     break
 
@@ -296,7 +308,7 @@ class Agent:
                 if ok and d.card in ("arrows", "fireball"):
                     self.opp.note_our_spell(time.time(), d.x * w, d.y * h, card=d.card)
                     # vol mesuré depuis la DÉCISION : c'est ce délai que brain.SPELL_IMPACT_S doit prévoir
-                    self.spells_pending.append({"card": d.card, "x": d.x, "y": d.y, "t_tap": now})
+                    self.spells_pending.append({"card": d.card, "x": d.x, "y": d.y, "t_tap": now, "reason": d.reason})
                 log.append({"t": round(now, 2), "card": d.card, "x": round(d.x, 3), "y": round(d.y, 3), "tile": d.tile,
                             "reason": d.reason, "ok": ok, "play_ms": play_ms, "elixir": el, "hand": hand,
                             "opp_elixir": round(self.opp.elixir, 1), "trade": d.trade,
