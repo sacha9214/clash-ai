@@ -6,6 +6,7 @@ au lieu d'une seule combinaison parmi des milliers qui ne serait presque jamais 
 from __future__ import annotations
 
 import json
+import os
 import random
 from pathlib import Path
 
@@ -202,6 +203,10 @@ def archetype(deck: list[str]) -> str:
 
 
 def load_ctx() -> dict:
+    seed = STATS.parents[1] / "learning/strategy_ctx.json"     # état versionné (comme load() pour strategy_stats)
+    if not CTX_STATS.exists() and seed.exists():
+        CTX_STATS.parent.mkdir(parents=True, exist_ok=True)
+        CTX_STATS.write_text(seed.read_text(encoding="utf-8"), encoding="utf-8")
     return json.loads(CTX_STATS.read_text(encoding="utf-8")) if CTX_STATS.exists() else {}
 
 
@@ -236,4 +241,6 @@ def record_ctx(ctx_stats: dict, ctx: str, params: dict, result: str) -> None:
     elif result == "loss":
         e["losses"] += 1
     CTX_STATS.parent.mkdir(parents=True, exist_ok=True)
-    CTX_STATS.write_text(json.dumps(ctx_stats, indent=1), encoding="utf-8")
+    tmp = CTX_STATS.with_suffix(".tmp")
+    tmp.write_text(json.dumps(ctx_stats, indent=1), encoding="utf-8")
+    os.replace(tmp, CTX_STATS)                        # jamais un fichier à moitié écrit si le PC s'arrête

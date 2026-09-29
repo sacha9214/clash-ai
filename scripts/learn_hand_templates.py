@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import collections
 import glob
+import hashlib
 import json
 import os
 import random
@@ -63,23 +64,30 @@ def main():
                         continue
                     crop = H.card_crop(img, slot)
                     name, score = H.identify(crop)       # anciens exemples : s'ils disent nettement AUTRE CHOSE, on jette
-                    if name != p["card"] and score >= 0.6:
-                        continue
+                    if name != p["card"] and score > 0.45:
+                        continue                         # le modèle actuel y voit autre chose : on n'apprend pas un doute
                     hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
                     kind = "color" if hsv[..., 1].mean() > 60 else "grey"
                     found[p["card"]][kind].append(cv2.resize(crop, H.SIZE))
     path = ROOT / "assets/card_templates.npz"
     old = np.load(path)
     imgs, labels = list(old["images"]), list(old["labels"])
+    have = {hashlib.md5(im.tobytes()).hexdigest() for im in imgs}   # relancer le script ne rajoute pas les mêmes images
     random.seed(0)
     for card, kinds in found.items():
         add = []
         for kind, lst in kinds.items():
-            add += random.sample(lst, min(len(lst), a.per // 2))
+            new = [im for im in lst if hashlib.md5(im.tobytes()).hexdigest() not in have]
+            add += random.sample(new, min(len(new), a.per // 2))
+        have |= {hashlib.md5(im.tobytes()).hexdigest() for im in add}
         imgs += add
         labels += [card] * len(add)
         print(f"{card:12} +{len(add)} ({len(kinds['color'])} en couleur, {len(kinds['grey'])} grisés trouvés)")
-    np.savez_compressed(path, images=np.stack(imgs), labels=np.array(labels))
+    # écrit à côté puis remplace : un arrêt en pleine écriture ne laisse pas un fichier tronqué (hand.py le charge à
+    # l'import : tous les scripts planteraient)
+    tmp = path.with_name("card_templates.tmp.npz")
+    np.savez_compressed(tmp, images=np.stack(imgs), labels=np.array(labels))
+    os.replace(tmp, path)
     print(f"-> {len(labels)} exemples dans {path.name}")
 
 

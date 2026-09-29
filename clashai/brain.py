@@ -77,6 +77,7 @@ TOWER_RANGE_TILES = 7.5
 # fin de match : 30 dernières secondes du temps réglementaire (3:00), puis prolongation = mort subite
 LATE_S, REGULATION_S = 150.0, 180.0
 PUSH_MEMORY_S = 8.0
+DUPLICATE_S = 8.0                           # une « ennemie » collée à notre unité de même nom, posée il y a < 8 s : doublon
 COUNTER_WINDOW_S = 12.0                     # contre-attaque : nos défenseurs posés il y a moins de 12 s
 STURDY_HP = 450                             # PV (niveau 1) d'un défenseur qui vaut la peine d'être soutenu                         # défenses contre la même attaque adverse : créditée une fois
 TANK_DEADLINE_S = 11.0                      # 12 s laissait les Gargouilles « gagner » contre un Géant (29/09) : il tape la tour avant
@@ -220,6 +221,7 @@ class Brain:
             self.placer = load()
         self.own_recent: list[tuple[tuple[str, ...], float, float, float]] = []   # (unités, x, y, instant) posées par nous
         self.own_lane: dict[str, int] = {}      # unité -> couloir de sa dernière pose
+        self.last_defense_building = False
         self.last_defense: tuple[float, int, float] | None = None   # (instant, couloir, élixir d'attaque couvert)
         self.musk_plays = 0                     # poses de notre Mousquetaire : la 3e, 6e… est ÉVOLUÉE (Cycles 2)
         self.own_played: dict[str, float] = {}   # unité -> dernier instant où l'on a posé sa carte
@@ -356,8 +358,11 @@ class Brain:
         # 2e passe anti-doublon, APRÈS les corrections de camp : la 1re tourne quand les deux boîtes sont encore
         # « ennemies ». Un grand Géant est souvent vu en 2 boîtes à ~3 cases d'écart (29/09 : la 2e restait ennemie
         # -> Mini P.E.K.K.A / Gargouilles sur notre propre Géant 2 s après sa pose)
+        # seulement juste après NOTRE pose de cette carte : sinon un vrai ennemi de même nom (Chevalier contre Chevalier)
+        # qui combat le nôtre disparaîtrait des menaces
         mine = [s for s in out if not s.enemy]
         out = [s for s in out if not (s.enemy and s.name in own_units
+                                      and now - self.own_played.get(s.name, -1e9) < DUPLICATE_S
                                       and any(m.name == s.name and _tile_dist(s.x, s.y, m.x, m.y) < 3.5 for m in mine))]
         return out
 
@@ -404,6 +409,7 @@ class Brain:
             # un défenseur donné GAGNANT par les stats a besoin de temps (Mini P.E.K.K.A sur un Géant : ~10 s) :
             # on attend plus longtemps avant d'en rajouter (29/09 : Valkyrie ajoutée 4,1 s après)
             wait = DEFENSE_WAIT_WIN_S if "gagne en" in d.reason else DEFENSE_WAIT_S
+            self.last_defense_building = card.kind == "building"
             self.last_defense = (now + wait - DEFENSE_WAIT_S, _lane(d.x), DECK[d.card].cost + 2)
         if d.card == "musketeer":
             self.musk_plays += 1
@@ -520,7 +526,10 @@ class Brain:
             lane0 = _lane(t0.x)
             attack = sum(_cost(n) for n in {s.name for s in threats if _lane(s.x) == lane0})
             if (self.last_defense and now - self.last_defense[0] < DEFENSE_WAIT_S and self.last_defense[1] == lane0
-                    and attack <= self.last_defense[2] + 2 and not self._tower_low(lane0)):
+                    and attack <= self.last_defense[2] + 2 and not self._tower_low(lane0)
+                    and (self.last_defense_building
+                         or any(not o.enemy and _lane(o.x) == lane0 for o in seen))):   # notre défenseur est encore là
+                # (un bâtiment n'est jamais dans « seen » : on le compte présent pendant l'attente)
                 return None
             return self._defend(threats, playable)
         # Canon posé à l'avance : son tank ou son Cochon descend vers le pont (38 % des Canons des pros)

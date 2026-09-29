@@ -62,12 +62,13 @@ async function tick() {
     document.getElementById('score').innerHTML = '<span class="w">' + s.wins + ' victoires</span> · <span class="l">'
         + s.losses + ' défaites</span> · ' + s.other + ' autres';
     document.getElementById('log').textContent = s.log.join('\\n');
+    const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const html = s.reviews.map(r => {
       const res = r.result === 'win' ? '<span class="w">victoire</span>' : r.result === 'loss'
-          ? '<span class="l">défaite</span>' : (r.result || '?');
-      const notes = r.notes.map(n => '<li>' + n.replace(/</g, '&lt;') + '</li>').join('');
+          ? '<span class="l">défaite</span>' : esc(r.result || '?');
+      const notes = r.notes.map(n => '<li>' + esc(n) + '</li>').join('');
       return '<div style="margin-bottom:10px"><b>' + r.game.slice(9, 11) + 'h' + r.game.slice(11, 13) + '</b> · '
-          + res + ' · adversaire ' + (r.ctx || '?') + '<div>' + r.facts + '</div>'
+          + res + ' · adversaire ' + esc(r.ctx || '?') + '<div>' + esc(r.facts) + '</div>'
           + (notes ? '<ul style="margin:4px 0 0 18px;padding:0;color:var(--fg)">' + notes + '</ul>' : '') + '</div>';
     }).join('');
     const box = document.getElementById('reviews');
@@ -125,9 +126,10 @@ def reviews(n: int = 8) -> list[dict]:
         return out
     notes = {}
     for r in rows(ROOT / "runs/reviews.jsonl"):
-        notes.setdefault(r["game"], []).append(r["note"])
+        if r.get("game") and r.get("note"):
+            notes.setdefault(r["game"], []).append(r["note"])
     out = []
-    for les in rows(ROOT / "runs/lessons.jsonl")[-n:][::-1]:
+    for les in [x for x in rows(ROOT / "runs/lessons.jsonl") if x.get("game")][-n:][::-1]:
         g = les["game"]
         out.append({"game": g, "result": les.get("result"), "ctx": les.get("ctx"),
                     "facts": f"{les.get('giants', 0)} Géants · {les.get('slowed_only', 0)} défenses qui ralentissent "

@@ -235,3 +235,16 @@ def test_choose_for_context_follows_what_won_against_that_type():
     assert picks.count(9) > picks.count(7)
     for k, v in ST.PINNED.items():
         assert ST.choose_for("bridge", stats, ctx_stats)[k] == v
+
+
+def test_load_ctx_seeds_from_learning(tmp_path, monkeypatch):
+    seed = Path(__file__).resolve().parents[1] / "learning/strategy_ctx.json"
+    if not seed.exists():
+        pytest.skip("pas d'état par type d'adversaire")
+    runs = tmp_path / "runs"
+    monkeypatch.setattr(ST, "STATS", runs / "strategy_stats.json")
+    monkeypatch.setattr(ST, "CTX_STATS", runs / "strategy_ctx.json")
+    fake_root = tmp_path
+    (fake_root / "learning").mkdir()
+    (fake_root / "learning/strategy_ctx.json").write_text(seed.read_text(encoding="utf-8"), encoding="utf-8")
+    assert ST.load_ctx() and (runs / "strategy_ctx.json").exists()     # avant : {} sur une machine neuve

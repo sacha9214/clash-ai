@@ -179,8 +179,10 @@ def main():
                 waited = time.time() - unknown_since
                 if waited > 10 and int(waited) % 10 == 0:
                     dev.tap(*B.px(img, 0.5, 0.966))
-                    if int(waited) % 20 == 0:
-                        back()      # écran inconnu (Route des trophées, menu ouvert…) : Retour le ferme
+                    if waited > 45 and int(waited) % 20 == 0:
+                        # écran inconnu (Route des trophées, menu ouvert…) : Retour le ferme. Pas avant 45 s : ce peut
+                        # être la recherche d'adversaire, que Retour annulerait
+                        back()
                     time.sleep(1.0)
                 if time.time() - unknown_since > 45:   # matchmaking dure rarement plus
                     cv2.imwrite(os.path.join(a.out, "unknown.jpg"), img)

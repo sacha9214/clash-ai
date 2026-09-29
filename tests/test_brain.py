@@ -670,3 +670,28 @@ def test_our_giant_seen_as_two_enemy_boxes_right_after_placement():
     assert all(not x.enemy for x in b._fix_sides(s, 101.9))
     d = b.decide(s, ["minions", "mini-pekka", "cannon", "fireball"], ALL, 3.7, 101.9)
     assert d is None or not d.reason.startswith("défense : giant")
+
+
+# ---- revue du 29/09 ----
+def test_mirror_enemy_fighting_our_unit_is_not_deleted_as_duplicate():
+    b = brain()
+    b.opp_deck = ["mini-pekka", "giant", "knight", "musketeer"]
+    b.played(Decision("mini-pekka", 0, *at(3, 24), "défense : x"), 0.0)
+    s = b._fix_sides([ours("mini-pekka", 3, 22), enemy("mini-pekka", 3, 19, vy_tiles=1.0)], 20.0)
+    assert any(x.enemy for x in s), "son Mini P.E.K.K.A, 20 s après le nôtre, reste une menace"
+
+
+def test_giant_duplicate_box_right_after_placement_still_merged():
+    b = brain()
+    b.played(Decision("giant", 0, *at(14, 28), "attaque : Géant"), 100.0)
+    s = b._fix_sides([ours("giant", 14, 28), enemy("giant", 14, 25)], 102.0)
+    assert not any(x.enemy for x in s)
+
+
+def test_second_defense_allowed_when_our_troop_defender_already_died():
+    b = brain()
+    t = enemy("lumberjack", 3, 22)
+    b.played(Decision("knight", 0, *at(3, 23), "défense : lumberjack -> knight"), 100.0)
+    b.virtual = []                                        # notre Chevalier est mort (plus vu, plus suivi)
+    d = b.decide([t], ["cannon", "mini-pekka", "minions", "fireball"], ALL, 6.0, 101.5)
+    assert d is not None and d.reason.startswith("défense")
