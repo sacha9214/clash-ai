@@ -660,3 +660,13 @@ def test_minions_first_against_a_pekka():
     b = brain()
     d = b.decide([enemy("pekka", 3, 21)], ["cannon", "knight", "minions", "fireball"], ALL, 8.0, 100.0)
     assert d is not None and d.card == "minions"
+
+
+def test_our_giant_seen_as_two_enemy_boxes_right_after_placement():
+    from clashai.brain import Seen
+    b = brain()
+    b.played(Decision("giant", 0, 0.151, 0.486, "attaque : Géant"), 100.0)
+    s = [Seen("giant", True, 85 / 578, 587 / 1280), Seen("giant", True, 82 / 578, 641 / 1280)]
+    assert all(not x.enemy for x in b._fix_sides(s, 101.9))
+    d = b.decide(s, ["minions", "mini-pekka", "cannon", "fireball"], ALL, 3.7, 101.9)
+    assert d is None or not d.reason.startswith("défense : giant")

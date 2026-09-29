@@ -322,7 +322,7 @@ class Brain:
         out = []
         for s in seen:
             base = s.name.replace("-evolution", "")
-            if s.enemy and s.y > RIVER_Y and any(s.name in names and _tile_dist(s.x, s.y, x, y) < 3
+            if s.enemy and s.y > RIVER_Y and any(s.name in names and _tile_dist(s.x, s.y, x, y) < 4
                                                  for names, x, y, _ in self.own_recent):
                 # NOTRE unité fraîchement posée prise pour une ennemie (ex. notre Géant « ennemi » sur sa case de pose)
                 s = Seen(s.name, False, s.x, s.y, s.vx, s.vy)
@@ -353,6 +353,12 @@ class Brain:
                     continue
                 s = Seen(s.name, True, s.x, s.y, s.vx, s.vy)
             out.append(s)
+        # 2e passe anti-doublon, APRÈS les corrections de camp : la 1re tourne quand les deux boîtes sont encore
+        # « ennemies ». Un grand Géant est souvent vu en 2 boîtes à ~3 cases d'écart (29/09 : la 2e restait ennemie
+        # -> Mini P.E.K.K.A / Gargouilles sur notre propre Géant 2 s après sa pose)
+        mine = [s for s in out if not s.enemy]
+        out = [s for s in out if not (s.enemy and s.name in own_units
+                                      and any(m.name == s.name and _tile_dist(s.x, s.y, m.x, m.y) < 3.5 for m in mine))]
         return out
 
     # ---- décision ----
