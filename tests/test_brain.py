@@ -608,3 +608,10 @@ def test_second_defense_allowed_against_a_big_push():
     b.played(d1, 100.0)
     d2 = b.decide(push, ["mini-pekka", "cannon", "minions", "fireball"], ALL, 7.0, 101.5)
     assert d2 is not None
+
+
+def test_stat_defense_never_picks_the_cannon_against_a_crowd():
+    b = brain()
+    seen = [enemy("barbarian", 3, 20 + i % 2) for i in range(3)]
+    d = b.decide(seen, ["cannon", "minions", "mini-pekka", "fireball"], ALL, 8.0, 100.0)
+    assert d is None or d.card != "cannon"

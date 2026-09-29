@@ -753,6 +753,8 @@ class Brain:
         for card in playable:
             if card not in DECK or DECK[card].kind == "spell" or card == "giant":
                 continue
+            if card == "cannon" and len(group) >= 3:
+                continue                # le Canon tire sur 1 cible à la fois : inutile contre une nuée (29/09 : Barbares)
             if t.name in AIR_UNITS and not card_info.combat(card)["hits_air"]:
                 continue                # ne peut pas les toucher (Mini P.E.K.K.A contre des Gargouilles) : élixir perdu
             r = self._duel(card, group, near_tower)
