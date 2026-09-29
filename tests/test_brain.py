@@ -100,7 +100,7 @@ def test_cannon_rule_position_survives_placement_model():
     d = b.decide([enemy("giant", 3, 18, vy_tiles=0.8)], ["cannon", "fireball", "arrows", "giant"],
                  [True, True, True, False], 5.0, 100.0)
     assert d is not None and d.card == "cannon"
-    assert d.tile[0] in (8, 9) and d.tile[1] == OWN_FIRST_ROW + 6
+    assert d.tile[0] in (8, 9) and d.tile[1] == OWN_FIRST_ROW + 3      # près de la rivière : il attire le tank
     assert d.precise
 
 
@@ -556,3 +556,15 @@ def test_musketeer_preferred_over_an_equal_winner():
     b = brain()
     d = b.decide([enemy("mini-pekka", 3, 21)], ["musketeer", "knight", "minions", "cannon"], ALL, 8.0, 100.0)
     assert d is not None and d.card in ("musketeer", "cannon")
+
+
+def test_cannon_always_close_to_the_river_to_pull():
+    from clashai.brain import OWN_FIRST_ROW
+    from clashai.tiles import PHONE
+    limit = PHONE.center(8, OWN_FIRST_ROW + 4)[1] + 1e-6
+    for u in ("giant", "golem", "hog-rider", "knight", "bomber"):
+        b = brain()
+        d = b.decide([enemy(u, 3, 18)], ["cannon", "fireball", "minions", "giant"], ALL, 8.0, 100.0)
+        if d is not None and d.card == "cannon":
+            assert d.y <= limit, (u, d.y, d.reason)
+            assert 0.4 < d.x < 0.6, (u, d.x)

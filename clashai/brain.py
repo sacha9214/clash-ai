@@ -357,6 +357,12 @@ class Brain:
         d = self._decide(seen, hand, ready, elixir, now)
         if d is None:
             return None
+        if d.card == "cannon" and not d.precise:
+            # le Canon doit ATTIRER : toujours au centre, près de la rivière (jamais au fond, jamais sur l'ennemi)
+            t = max((s for s in seen if s.enemy), key=lambda s: s.y, default=None)
+            col = 8 if (t.x if t else d.x) < 0.5 else 9
+            d.x, d.y = PHONE.center(col, OWN_FIRST_ROW + 3)
+            d.precise = True
         if self.placer and DECK[d.card].kind != "spell" and self.placer.knows(d.card) and not d.precise:
             units = [(u.name, u.enemy, *PHONE.to_tile(u.x, u.y)) for u in seen]
             # couloir choisi par les règles (côté de l'ennemi : ~80 % d'accord avec les pros), case exacte par le
@@ -488,7 +494,7 @@ class Brain:
                   and RIVER_Y - 6 * PHONE.th < e.y <= RIVER_Y and e.vy >= 0]
         if coming and "cannon" in playable:
             t = max(coming, key=lambda e: e.y)
-            row = OWN_FIRST_ROW + (4 if t.name in FAST_BUILDING_HUNTERS else 6 if t.name in SLOW_TANKS else 3)
+            row = OWN_FIRST_ROW + (4 if t.name in FAST_BUILDING_HUNTERS else 3)   # assez près pour l'attirer
             x, y = PHONE.center(8 if t.x < 0.5 else 9, row)
             return Decision("cannon", playable["cannon"], x, y, f"canon à l'avance : {t.name} arrive vers le pont",
                             precise=True)
@@ -757,6 +763,11 @@ class Brain:
             # personne ne gagne seul au pont : on attend qu'ils entrent dans la portée de notre tour, puis on défend
             # à côté d'elle (tour + unité ensemble) — au lieu de perdre l'unité et l'élixir loin de la tour
             return None
+        if card == "cannon":
+            col = 8 if t.x < 0.5 else 9                        # au centre, près de la rivière : il attire l'ennemi
+            x, y = PHONE.center(col, OWN_FIRST_ROW + (4 if t.name in FAST_BUILDING_HUNTERS else 3))
+            return Decision(card, playable[card], x, y, f"défense : {t.name} x{len(group)} -> canon au centre (attire)",
+                            precise=True, trade=self._trade(card, group, near_tower, push_cost), push=push_cost)
         me = card_info.combat(card)
         their_range = max(card_info.combat(g.name)["range"] for g in group)
         if me["range"] >= 4 and their_range < me["range"] - 1:
@@ -830,7 +841,8 @@ class Brain:
             elif t.name == "royal-giant":
                 row, why = OWN_FIRST_ROW + 2, "près de la rivière : le Géant royal tire de loin, il faut l'attirer tôt"
             elif t.name in SLOW_TANKS:
-                row, why = OWN_FIRST_ROW + 6, "en retrait : tank lent, long chemin sous le feu des 2 tours"
+                # pas plus bas : trop en retrait, le tank ne « voit » pas le Canon et file sur la tour (29/09)
+                row, why = OWN_FIRST_ROW + 3, "3 cases sous la rivière : assez près pour attirer le tank au centre"
             else:
                 row, why = OWN_FIRST_ROW + 4, "4 cases sous la rivière"
             x, y = PHONE.center(col, row)
