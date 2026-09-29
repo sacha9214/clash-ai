@@ -502,3 +502,11 @@ def test_his_first_mirror_knight_in_the_other_lane_stays_enemy():
     b.played(Decision("knight", 0, *at(3, 24), "défense : x"), 90.0)      # notre Chevalier, couloir gauche
     s = b._fix_sides([enemy("knight", 14, 20, vy_tiles=1.0)], 100.0)       # le sien, couloir droit
     assert len(s) == 1 and s[0].enemy
+
+
+def test_our_minions_from_the_centre_read_as_enemy_in_a_lane_are_ours():
+    b = brain()
+    b.played(Decision("minions", 0, *at(9, 28), "test"), 95.0)
+    d = b.decide([enemy("minion", 4, 22), enemy("minion", 4, 23)], ["knight", "cannon", "valkyrie", "fireball"],
+                 ALL, 8.0, 100.0)
+    assert d is None or not d.reason.startswith("défense : minion")

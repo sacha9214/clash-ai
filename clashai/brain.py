@@ -311,7 +311,9 @@ class Brain:
                                                  for names, x, y, _ in self.own_recent):
                 # NOTRE unité fraîchement posée prise pour une ennemie (ex. notre Géant « ennemi » sur sa case de pose)
                 s = Seen(s.name, False, s.x, s.y, s.vx, s.vy)
-            elif s.enemy and (any(v["name"] == base and now < v["until"] and _tile_dist(s.x, s.y, v["x"], v["y"]) < 4
+            elif s.enemy and (any(v["name"] == base and now < v["until"]
+                                  # volantes : elles partent en diagonale vers un couloir, pas tout droit -> plus large
+                                  and _tile_dist(s.x, s.y, v["x"], v["y"]) < (7 if base in AIR_UNITS else 4)
                                   for v in self.virtual)
                               or (base in own_units and s.y > RIVER_Y and s.vy < 0
                                   and now - self.own_played.get(base, -1e9) < OWN_UNIT_LIFE_S)):
