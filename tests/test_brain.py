@@ -621,3 +621,29 @@ def test_no_cannon_against_a_single_visible_barbarian():
     b = brain()
     d = b.decide([enemy("barbarian", 3, 20)], ["cannon", "knight", "minions", "fireball"], ALL, 8.0, 100.0)
     assert d is None or d.card != "cannon"
+
+
+# ---- audit des duels du 29/09 : données de combat corrigées (dégâts de zone, volants, cibles) ----
+@pytest.mark.parametrize("ours_card, foe, win", [
+    ("minions", "skeleton-dragon", False),     # souffle de zone : les Gargouilles meurent en un coup
+    ("minions", "wizard", False),
+    ("minions", "baby-dragon", False),
+    ("minions", "executioner", False),
+    ("minions", "pekka", True),                # il ne touche pas les volants
+    ("minions", "mega-knight", True),
+    ("musketeer", "skeleton-dragon", True),    # près de la tour
+    ("mini-pekka", "giant", True),
+])
+def test_duel_audit(ours_card, foe, win):
+    from clashai import card_info
+    from clashai.brain import Brain, Seen
+    g = [Seen(foe, True, 0.3, 0.6)] * card_info.combat(foe)["count"]
+    r = Brain._duel(ours_card, g, True)
+    assert r is not None and r[0] == win, (ours_card, foe, r)
+
+
+def test_minions_not_sent_on_skeleton_dragons():
+    b = brain()
+    d = b.decide([enemy("skeleton-dragon", 3, 21), enemy("skeleton-dragon", 4, 21)],
+                 ["minions", "musketeer", "knight", "cannon"], ALL, 8.0, 100.0)
+    assert d is None or d.card != "minions"

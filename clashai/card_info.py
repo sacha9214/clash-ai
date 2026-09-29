@@ -36,7 +36,7 @@ def card_for_unit(unit: str) -> str | None:
 
 
 @lru_cache(maxsize=512)
-def info(unit: str) -> dict:
+def _info_raw(unit: str) -> dict:
     """Portée (cases), vitesse (cases/s), cibles, zone, volant, vise seulement les bâtiments, coût."""
     card = card_for_unit(unit)
     e = db().get(card or "", {})
@@ -98,6 +98,47 @@ def tower_damage(card: str) -> float:
     return _num(l11.get("Crown Tower Damage")) or 0.0
 
 
+# Corrections vérifiées à la main (audit des duels du 29/09) : la base mélange sources et versions, et plusieurs
+# champs étaient faux (Dragons squelettes sans dégâts de zone -> nos Gargouilles « gagnaient » en 3 s alors qu'elles
+# meurent en un souffle ; Méga Chevalier « volant »…). Appliqué en dernier par combat() et info().
+SPLASH_UNITS = {"baby-dragon", "skeleton-dragon", "wizard", "ice-wizard", "bomber", "bowler", "executioner", "witch",
+                "firecracker", "electro-dragon", "sparky", "mortar", "bomb-tower", "phoenix-big", "magic-archer",
+                "valkyrie", "dark-prince", "mega-knight", "princess", "hunter", "skeleton-king", "royal-ghost",
+                "electro-wizard", "wall-breaker", "fire-spirit", "ice-spirit", "electro-spirit"}
+NOT_SPLASH = {"ice-golem", "lumberjack", "electro-giant"}
+GROUND_ONLY = {"golem", "giant-skeleton", "rascal-boy", "mega-knight", "knight", "barbarian", "elite-barbarian",
+               "mini-pekka", "pekka", "prince", "dark-prince", "bandit", "lumberjack", "valkyrie", "bowler",
+               "royal-ghost", "golden-knight", "monk", "fisherman", "miner", "goblin", "skeleton", "guard"}
+NOT_FLYING = {"mega-knight", "golem", "giant", "pekka", "knight"}
+BUILDINGS_ONLY = {"giant", "golem", "golemite", "hog-rider", "royal-giant", "electro-giant", "ice-golem", "balloon",
+                  "battle-ram", "goblin-giant", "wall-breaker", "royal-hog", "lava-hound", "elixir-golem-big",
+                  "elixir-golem-mid", "elixir-golem-small", "giant-skeleton-no"}
+STAT_FIX = {  # PV / dégâts au niveau 1 d'une commune (même échelle que le reste), quand la base est fausse ou vide
+    "rascal-girl": {"hp": 85.0, "dmg": 42.0, "hs": 1.0, "count": 2, "hits_air": True, "range": 5.0},
+    "goblin-brawler": {"hp": 300.0, "dmg": 70.0, "hs": 1.1},
+    "princess": {"dmg": 55.0, "range": 9.0},
+}
+
+
+def _fix(name: str, d: dict) -> dict:
+    if name in SPLASH_UNITS and "splash" in d:
+        d["splash"] = True
+    if name in NOT_SPLASH and "splash" in d:
+        d["splash"] = False
+    if name in GROUND_ONLY and "hits_air" in d:
+        d["hits_air"] = False
+    if name in NOT_FLYING:
+        d["flying"] = False
+    if name in BUILDINGS_ONLY:
+        d["buildings_only"] = True
+    for k, v in STAT_FIX.get(name, {}).items():
+        if k in d or k in ("hp", "dmg", "hs", "count"):
+            d[k] = v
+    if "dmg" in d and "hs" in d and d["hs"]:
+        d["dps"] = d["dmg"] / d["hs"]
+    return d
+
+
 @lru_cache(maxsize=512)
 def combat(name: str) -> dict:
     """Pour un combat estimé : PV et dégâts/s PAR UNITÉ (ramenés au niveau 1 d'une commune : toutes les cartes à la
@@ -115,10 +156,15 @@ def combat(name: str) -> dict:
         hp = hp or (_num(l11.get("Hitpoints")) or 0) / 2.56
         dmg = dmg or (_num(l11.get("Damage")) or _num(l11.get("Area Damage")) or 0) / 2.56
     t = (u.get("targets") or "")
-    return {
+    return _fix(name, {
         "hp": hp, "dps": dmg / hs if hs else 0, "count": u.get("count") or 1,
         "dmg": dmg, "hs": hs,
         "hits_air": "air" in t or i["hits_air"], "hits_ground": "sol" in t or "ground" in t or not t,
         "flying": i["flying"], "splash": bool(u.get("splash_radius_tiles") or i["splash"]),
         "range": i["range"] or 1.0, "buildings_only": i["buildings_only"], "cost": e.get("elixir") or 3,
-    }
+    })
+
+
+def info(unit: str) -> dict:
+    """Portée, vitesse, cibles, zone… d'une unité (base de cartes + corrections vérifiées)."""
+    return _fix(unit, _info_raw(unit))
