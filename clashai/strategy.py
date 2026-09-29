@@ -47,7 +47,8 @@ DEFAULT = {"giant_elixir": 9, "giant_spot": "king", "support_min_elixir": 4, "ar
 
 # Fonctions qui ont fait leurs preuves : plus tirées au hasard (27/09 : une défaite en 15 coups avec les trois
 # coupées par l'exploration — Valkyrie sur des Squelettes, Mousquetaire sur un Gobelin)
-PINNED = {"stat_defense": True, "ignore_small": True, "placement_model": True}
+PINNED = {"stat_defense": True, "ignore_small": True, "placement_model": True,
+          "spell_value": 0.8}   # un sort détruit au moins 80 % de son coût (29/09 : Boule de feu pour 2,8 élixirs à 0.6)
 
 
 def _key(p: dict) -> str:
