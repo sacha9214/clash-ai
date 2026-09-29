@@ -136,12 +136,14 @@ class Agent:
                                         "hit": None, "hit_value": None})
                 continue
             for u in units:
-                if u.name == sp["card"] and _tile_dist(u.center[0] / w, u.center[1] / h, sp["x"], sp["y"]) < 4:
+                # l'EXPLOSION (le sort arrivé sur sa cible), pas la boule encore en vol à 4 cases : sinon on
+                # mesurait autour de la boule pendant le vol, et un bon tir passait pour « raté »
+                if u.name == sp["card"] and _tile_dist(u.center[0] / w, u.center[1] / h, sp["x"], sp["y"]) < 1.5:
                     # ce qui est VRAIMENT dans le rayon quand le sort tombe (vs ce qui était visé au tir)
                     from clashai import card_info
                     from clashai.opponent import UNIT2CARD
                     r = card_info.spell_radius(sp["card"]) + 0.5
-                    ix, iy = u.center[0] / w, u.center[1] / h
+                    ix, iy = sp["x"], sp["y"]                     # le point visé = centre de l'explosion
                     hit = [e.name for e in units if e.enemy and e.name != sp["card"] and e.name in UNIT2CARD
                            and _tile_dist(e.center[0] / w, e.center[1] / h, ix, iy) <= r]
                     value = sum(UNIT2CARD[n][1] / max(UNIT2CARD[n][2], 1) for n in hit)   # élixir par unité touchée

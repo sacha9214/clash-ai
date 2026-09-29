@@ -694,6 +694,11 @@ class Brain:
 
     @staticmethod
     def _impact_time(card: str, x: float, y: float) -> float:
+        """Temps entre la décision et l'impact. Boule de feu : elle part de notre Roi, le vol dépend de la distance
+        (mesuré sur 258 tirs le 29/09 : 1,04 s + 0,047 s/case jusqu'à la 1re détection, +0,3 s jusqu'à l'explosion).
+        L'ancien temps fixe de 2,0 s visait trop tard les cibles proches et trop tôt les lointaines."""
+        if card == "fireball":
+            return 1.35 + 0.047 * _tile_dist(x, y, 0.5, KING_Y)
         return SPELL_IMPACT_S.get(card, 2.0)
 
     def evo_musketeer(self) -> bool:
