@@ -143,6 +143,8 @@ def main():
     ap.add_argument("--every", type=int, default=4)
     ap.add_argument("--minutes", type=float, default=20)
     ap.add_argument("--no-show", action="store_true")
+    ap.add_argument("--review-pause", type=float, default=0,
+                    help="pause après chaque match (minutes max) : on corrige ses erreurs, puis on relance")
     ap.add_argument("--train-between", action="store_true",
                     help="réglage fin entre deux matchs (détection à pleine vitesse) plutôt qu'en parallèle")
     a = ap.parse_args()
@@ -163,6 +165,19 @@ def main():
         if r.returncode != 0:
             print("autoplay en échec : arrêt (téléphone débranché ?)", flush=True)
             break
+        if a.review_pause > 0:
+            # PAUSE REVUE : on s'arrête après chaque match le temps de lire ses erreurs et de les corriger ; la revue
+            # retire runs/REVIEW_PENDING pour relancer. Sans revue, reprise seule après --review-pause minutes.
+            flag = ROOT / "runs/REVIEW_PENDING"
+            game = max((p.name for p in (ROOT / "runs/games").iterdir() if p.is_dir()), default="?")
+            flag.write_text(game, encoding="utf-8")
+            print(f"=== pause revue {game} ===", flush=True)
+            t0 = time.time()
+            while flag.exists() and time.time() - t0 < a.review_pause * 60:
+                time.sleep(2)
+            flag.unlink(missing_ok=True)
+            print(f"=== reprise ({'revue faite' if time.time() - t0 < a.review_pause * 60 else 'délai écoulé'}) ===",
+                  flush=True)
         if g % a.every == 0 and (trainer is None or not trainer.is_alive()):
             # réglage fin EN PARALLÈLE des matchs (le téléphone ne reste jamais sans jouer) ; le nouveau scanner,
             # s'il est adopté, est chargé au match suivant
