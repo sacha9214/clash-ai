@@ -574,3 +574,10 @@ def test_unit_walking_away_in_his_half_is_no_threat():
     b = brain()
     d = b.decide([enemy("giant", 3, 14, vy_tiles=-0.8)], ["cannon", "knight", "minions", "fireball"], ALL, 8.0, 100.0)
     assert d is None or not d.reason.startswith("défense")
+
+
+def test_no_cannon_against_a_barbarian_crowd():
+    b = brain()
+    seen = [enemy("barbarian", 3 + i % 2, 20 + i // 2) for i in range(5)]
+    d = b.decide(seen, ["cannon", "knight", "minions", "fireball"], ALL, 8.0, 100.0)
+    assert d is None or d.card != "cannon"
