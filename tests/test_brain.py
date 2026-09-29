@@ -581,3 +581,10 @@ def test_no_cannon_against_a_barbarian_crowd():
     seen = [enemy("barbarian", 3 + i % 2, 20 + i // 2) for i in range(5)]
     d = b.decide(seen, ["cannon", "knight", "minions", "fireball"], ALL, 8.0, 100.0)
     assert d is None or d.card != "cannon"
+
+
+def test_pekka_read_as_his_lumberjack_when_no_pekka_nor_mini_pekka():
+    b = brain()
+    b.opp_deck = ["barbarians", "battle-ram", "lumberjack", "giant", "goblins"]
+    seen = b._fix_sides([enemy("pekka", 3, 22)], 100.0)
+    assert seen[0].name == "lumberjack"

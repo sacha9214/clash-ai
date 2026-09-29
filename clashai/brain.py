@@ -62,9 +62,14 @@ MUSKETEER_BONUS = 1.5                       # préférence pour la Mousquetaire 
 DEFENSE_RESERVE = 3                         # élixir toujours gardé pour défendre (Chevalier / Canon)
 GIANT_FOLLOW_ELIXIR = 8                     # Géant (5) + de quoi le soutenir (3) : sinon on ne le lance pas
 # unité lue -> (sa carte, unité qu'elle est probablement, carte de celle-ci) : confusions vues sur nos matchs
-ALIAS = {"pekka": ("pekka", "mini-pekka", "mini-pekka"), "mini-pekka-hero": ("mini-pekka", "mini-pekka", "mini-pekka"),
-         "golden-knight": ("golden-knight", "knight", "knight"), "barbarian": ("barbarians", "knight", "knight"),
-         "knight": ("knight", "barbarian", "barbarians")}
+# unité lue -> (sa carte, [(unité qu'elle est probablement, carte de celle-ci), ...] essayées dans l'ordre) :
+# confusions vues sur nos matchs. Remplacée seulement si sa carte n'est pas dans son deck connu et le candidat oui.
+ALIAS = {"pekka": ("pekka", [("mini-pekka", "mini-pekka"), ("lumberjack", "lumberjack"), ("dark-prince", "dark-prince"),
+                             ("knight", "knight"), ("barbarian", "barbarians"), ("valkyrie", "valkyrie")]),
+         "mini-pekka-hero": ("mini-pekka", [("mini-pekka", "mini-pekka")]),
+         "golden-knight": ("golden-knight", [("knight", "knight"), ("barbarian", "barbarians")]),
+         "barbarian": ("barbarians", [("knight", "knight"), ("elite-barbarian", "elite-barbarians")]),
+         "knight": ("knight", [("barbarian", "barbarians"), ("golden-knight", "golden-knight")])}
 TOWER_DPS = 60.0                            # tour princesse, niveau 1 (même échelle que card_info.combat)
 TOWER_RANGE_TILES = 7.5
 # fin de match : 30 dernières secondes du temps réglementaire (3:00), puis prolongation = mort subite
@@ -302,9 +307,12 @@ class Brain:
         # (27/09 : son Mini P.E.K.K.A lu « P.E.K.K.A » 10 fois -> menace surestimée)
         if len(self.opp_deck) >= 4:
             deck = set(self.opp_deck)
-            seen = [Seen(ALIAS[s.name][1], s.enemy, s.x, s.y, s.vx, s.vy)
-                    if s.enemy and s.name in ALIAS and ALIAS[s.name][0] not in deck and ALIAS[s.name][2] in deck else s
-                    for s in seen]
+            def real(s):
+                if not s.enemy or s.name not in ALIAS or ALIAS[s.name][0] in deck:
+                    return s
+                unit = next((u for u, c in ALIAS[s.name][1] if c in deck), None)
+                return Seen(unit, s.enemy, s.x, s.y, s.vx, s.vy) if unit else s
+            seen = [real(s) for s in seen]
         mine = [s for s in seen if not s.enemy]
         seen = [s for s in seen if not (s.enemy and s.name in own_units
                                         and any(m.name == s.name and _tile_dist(s.x, s.y, m.x, m.y) < 2.5 for m in mine))]
