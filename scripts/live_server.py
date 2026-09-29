@@ -38,6 +38,7 @@ PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
  <div class="card"><h1>État</h1><div id="state">…</div><div class="mut" id="age"></div></div>
  <div class="card"><h1>Aujourd'hui</h1><div id="score">…</div></div>
  <div class="card"><h1>Derniers événements</h1><pre id="log">…</pre></div>
+ <div class="card"><h1>Revues des matchs</h1><div id="reviews" class="mut">…</div></div>
 </div></main>
 <script>
 let lastAge = null, loading = false;
@@ -61,6 +62,16 @@ async function tick() {
     document.getElementById('score').innerHTML = '<span class="w">' + s.wins + ' victoires</span> · <span class="l">'
         + s.losses + ' défaites</span> · ' + s.other + ' autres';
     document.getElementById('log').textContent = s.log.join('\\n');
+    const html = s.reviews.map(r => {
+      const res = r.result === 'win' ? '<span class="w">victoire</span>' : r.result === 'loss'
+          ? '<span class="l">défaite</span>' : (r.result || '?');
+      const notes = r.notes.map(n => '<li>' + n.replace(/</g, '&lt;') + '</li>').join('');
+      return '<div style="margin-bottom:10px"><b>' + r.game.slice(9, 11) + 'h' + r.game.slice(11, 13) + '</b> · '
+          + res + ' · adversaire ' + (r.ctx || '?') + '<div>' + r.facts + '</div>'
+          + (notes ? '<ul style="margin:4px 0 0 18px;padding:0;color:var(--fg)">' + notes + '</ul>' : '') + '</div>';
+    }).join('');
+    const box = document.getElementById('reviews');
+    if (box.dataset.html !== html) { box.innerHTML = html || 'aucune revue'; box.dataset.html = html; }
   } catch (e) { document.getElementById('state').textContent = 'PC injoignable'; }
 }
 tick(); setInterval(tick, 1000);
@@ -96,7 +107,33 @@ def status() -> dict:
             if str(j.get("game", "")).startswith(today):
                 r = j.get("result")
                 w, l, o = w + (r == "win"), l + (r == "loss"), o + (r not in ("win", "loss"))
-    return {"state": state, "image_age": age, "wins": w, "losses": l, "other": o, "log": lines}
+    return {"state": state, "image_age": age, "wins": w, "losses": l, "other": o, "log": lines, "reviews": reviews()}
+
+
+def reviews(n: int = 8) -> list[dict]:
+    """Revue de chaque match (la plus récente d'abord) : bilan automatique (runs/lessons.jsonl) + ce que Claude a
+    constaté et corrigé (runs/reviews.jsonl : {"game", "note"})."""
+    def rows(f):
+        if not f.exists():
+            return []
+        out = []
+        for line in f.read_text(encoding="utf-8").splitlines():
+            try:
+                out.append(json.loads(line))
+            except ValueError:
+                pass
+        return out
+    notes = {}
+    for r in rows(ROOT / "runs/reviews.jsonl"):
+        notes.setdefault(r["game"], []).append(r["note"])
+    out = []
+    for les in rows(ROOT / "runs/lessons.jsonl")[-n:][::-1]:
+        g = les["game"]
+        out.append({"game": g, "result": les.get("result"), "ctx": les.get("ctx"),
+                    "facts": f"{les.get('giants', 0)} Géants · {les.get('slowed_only', 0)} défenses qui ralentissent "
+                             f"seulement · {les.get('ghost_defenses', 0)} défenses contre des fantômes",
+                    "notes": notes.get(g, [])})
+    return out
 
 
 class Handler(BaseHTTPRequestHandler):
