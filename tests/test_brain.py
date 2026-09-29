@@ -550,3 +550,9 @@ def test_no_cycling_below_the_giant_threshold():
     b = brain(cycle_at=7.0, giant_elixir=7, edge_push=0)
     d = b.decide([], ["minions", "knight", "giant", "cannon"], ALL, 7.2, 100.0)
     assert d is None                                     # on garde l'élixir pour le Géant
+
+
+def test_musketeer_preferred_over_an_equal_winner():
+    b = brain()
+    d = b.decide([enemy("mini-pekka", 3, 21)], ["musketeer", "knight", "minions", "cannon"], ALL, 8.0, 100.0)
+    assert d is not None and d.card in ("musketeer", "cannon")

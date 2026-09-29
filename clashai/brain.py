@@ -58,6 +58,7 @@ WIN_CONDITIONS = {"giant", "hog-rider", "royal-giant", "golem", "pekka", "balloo
 # Une de « nos » unités de l'autre côté de la rivière sans qu'on ait posé cette carte depuis ce délai : le détecteur
 # s'est trompé de camp (match du 25/09 : Géant ennemi vu « à nous » -> « soutien derrière le Géant » fantôme)
 OWN_UNIT_LIFE_S = 40.0
+MUSKETEER_BONUS = 1.5                       # préférence pour la Mousquetaire en défense (voir _stat_pick)
 DEFENSE_RESERVE = 3                         # élixir toujours gardé pour défendre (Chevalier / Canon)
 GIANT_FOLLOW_ELIXIR = 8                     # Géant (5) + de quoi le soutenir (3) : sinon on ne le lance pas
 # unité lue -> (sa carte, unité qu'elle est probablement, carte de celle-ci) : confusions vues sur nos matchs
@@ -725,8 +726,11 @@ class Brain:
             if r:
                 win, margin, t_kill = r
                 # gagnants : le moins cher d'abord ; si personne ne gagne : celui qui tient le plus longtemps
-                options.append((not win, DECK[card].cost > push_cost + 1, DECK[card].cost if win else 0, -margin,
-                                DECK[card].cost, card, t_kill))
+                # la Mousquetaire compte 1 élixir de moins : elle tire de loin, survit souvent et repart en
+                # contre-attaque, et chaque pose charge son évolution (29/09 : 1 Mousquetaire par partie)
+                eff = DECK[card].cost - (MUSKETEER_BONUS if card == "musketeer" else 0)
+                options.append((not win, eff > push_cost + 1, eff if win else 0, -margin,
+                                eff, card, t_kill))
         if not options:
             return None
         # garder Canon / Mini P.E.K.K.A pour son Géant/Cochon s'il l'a en main et qu'une autre carte gagne ici
