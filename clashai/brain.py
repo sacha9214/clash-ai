@@ -59,6 +59,7 @@ WIN_CONDITIONS = {"giant", "hog-rider", "royal-giant", "golem", "pekka", "balloo
 # s'est trompé de camp (match du 25/09 : Géant ennemi vu « à nous » -> « soutien derrière le Géant » fantôme)
 OWN_UNIT_LIFE_S = 40.0
 MUSKETEER_BONUS = 1.5                       # préférence pour la Mousquetaire en défense (voir _stat_pick)
+DEFENSE_WAIT_S = 4.0                        # après une défense : pas de 2e carte sur la même attaque avant 4 s
 DEFENSE_RESERVE = 3                         # élixir toujours gardé pour défendre (Chevalier / Canon)
 GIANT_FOLLOW_ELIXIR = 8                     # Géant (5) + de quoi le soutenir (3) : sinon on ne le lance pas
 # unité lue -> (sa carte, unité qu'elle est probablement, carte de celle-ci) : confusions vues sur nos matchs
@@ -218,6 +219,7 @@ class Brain:
             self.placer = load()
         self.own_recent: list[tuple[tuple[str, ...], float, float, float]] = []   # (unités, x, y, instant) posées par nous
         self.own_lane: dict[str, int] = {}      # unité -> couloir de sa dernière pose
+        self.last_defense: tuple[float, int, float] | None = None   # (instant, couloir, élixir d'attaque couvert)
         self.musk_plays = 0                     # poses de notre Mousquetaire : la 3e, 6e… est ÉVOLUÉE (Cycles 2)
         self.own_played: dict[str, float] = {}   # unité -> dernier instant où l'on a posé sa carte
         self.trades: list[tuple[float, float]] = []   # (instant, élixir gagné) de chaque échange vraiment joué
@@ -390,6 +392,8 @@ class Brain:
         """La carte de `d` est vraiment posée (tap vérifié) : l'IA s'en souvient (camp de ses unités, troupes
         virtuelles, couloir de sa dernière troupe)."""
         card = DECK[d.card]
+        if d.reason.startswith("défense") and card.kind != "spell":
+            self.last_defense = (now, _lane(d.x), DECK[d.card].cost + 2)   # instant, couloir, attaque couverte (~)
         if d.card == "musketeer":
             self.musk_plays += 1
         if d.trade is not None:
@@ -498,6 +502,14 @@ class Brain:
             vi = next((i for i, c in enumerate(hand) if c == "valkyrie" and ready[i]), None)
             if (len(crowd) >= 3 and vi is not None and "valkyrie" not in playable
                     and elixir >= DECK["valkyrie"].cost - 1.5 and t0.y < OWN_TOWER_Y - 0.06 and not self._tower_low(_lane(t0.x))):
+                return None
+            # SURDÉFENSE : une défense vient d'être posée dans ce couloir contre une attaque modeste -> on laisse
+            # le défenseur faire son travail avant d'en rajouter (29/09 : Mini P.E.K.K.A + Canon + Chevalier = 11 élixirs
+            # en 4 s contre un Bûcheron à 4)
+            lane0 = _lane(t0.x)
+            attack = sum(_cost(n) for n in {s.name for s in threats if _lane(s.x) == lane0})
+            if (self.last_defense and now - self.last_defense[0] < DEFENSE_WAIT_S and self.last_defense[1] == lane0
+                    and attack <= self.last_defense[2] + 2 and not self._tower_low(lane0)):
                 return None
             return self._defend(threats, playable)
         # Canon posé à l'avance : son tank ou son Cochon descend vers le pont (38 % des Canons des pros)

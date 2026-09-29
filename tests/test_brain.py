@@ -588,3 +588,23 @@ def test_pekka_read_as_his_lumberjack_when_no_pekka_nor_mini_pekka():
     b.opp_deck = ["barbarians", "battle-ram", "lumberjack", "giant", "goblins"]
     seen = b._fix_sides([enemy("pekka", 3, 22)], 100.0)
     assert seen[0].name == "lumberjack"
+
+
+def test_no_second_defense_on_a_small_attack_right_after_the_first():
+    b = brain()
+    t = enemy("lumberjack", 3, 22)
+    d1 = b.decide([t], ["mini-pekka", "cannon", "knight", "fireball"], ALL, 10.0, 100.0)
+    assert d1 is not None and d1.reason.startswith("défense")
+    b.played(d1, 100.0)
+    d2 = b.decide([t], ["cannon", "knight", "minions", "fireball"], ALL, 6.0, 101.5)
+    assert d2 is None or not d2.reason.startswith("défense")
+
+
+def test_second_defense_allowed_against_a_big_push():
+    b = brain()
+    push = [enemy("giant", 3, 22), enemy("wizard", 3, 20), enemy("musketeer", 4, 19)]
+    d1 = b.decide(push, ["knight", "cannon", "minions", "fireball"], ALL, 10.0, 100.0)
+    assert d1 is not None
+    b.played(d1, 100.0)
+    d2 = b.decide(push, ["mini-pekka", "cannon", "minions", "fireball"], ALL, 7.0, 101.5)
+    assert d2 is not None
