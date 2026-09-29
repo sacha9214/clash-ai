@@ -58,6 +58,8 @@ WIN_CONDITIONS = {"giant", "hog-rider", "royal-giant", "golem", "pekka", "balloo
 # Une de « nos » unités de l'autre côté de la rivière sans qu'on ait posé cette carte depuis ce délai : le détecteur
 # s'est trompé de camp (match du 25/09 : Géant ennemi vu « à nous » -> « soutien derrière le Géant » fantôme)
 OWN_UNIT_LIFE_S = 40.0
+DEFENSE_RESERVE = 3                         # élixir toujours gardé pour défendre (Chevalier / Canon)
+GIANT_FOLLOW_ELIXIR = 8                     # Géant (5) + de quoi le soutenir (3) : sinon on ne le lance pas
 # unité lue -> (sa carte, unité qu'elle est probablement, carte de celle-ci) : confusions vues sur nos matchs
 ALIAS = {"pekka": ("pekka", "mini-pekka", "mini-pekka"), "mini-pekka-hero": ("mini-pekka", "mini-pekka", "mini-pekka"),
          "golden-knight": ("golden-knight", "knight", "knight"), "barbarian": ("barbarians", "knight", "knight"),
@@ -518,8 +520,9 @@ class Brain:
         order = ["archers", "musketeer", "valkyrie", "mini-pekka", "knight"]
         if set(self.opp_hand) & SMALL_SPELLS:
             order = [c for c in order if c != "archers"] + ["archers"]
+        reserve = 0 if self.opp_elixir < 3 or mode in ("tout pour l'attaque", "mort subite") else DEFENSE_RESERVE
         for card in order:
-            if card in playable:
+            if card in playable and elixir - DECK[card].cost >= reserve:   # toujours de quoi défendre derrière
                 x, y = _clamp_own(lead.x, lead.y + 0.05)  # juste derrière lui : il encaisse, notre soutien tire
                 return Decision(card, playable[card], x, y, f"contre-attaque : {card} derrière notre {lead.name}")
         return None
@@ -917,6 +920,11 @@ class Brain:
             giant_at = min(giant_at, 7)      # la première tour qui tombe gagne
         if elixir >= self._cycle_at(now):
             giant_at = min(giant_at, elixir)  # jamais d'élixir perdu, même en retard
+        if mode not in ("tout pour l'attaque", "mort subite"):
+            # un Géant seul se fait démonter : on le pose seulement si, après ses 5 élixirs, il en reste pour le
+            # SOUTIEN derrière lui (3) — la réserve de défense se reconstitue pendant qu'il marche jusqu'au pont
+            giant_at = max(giant_at, GIANT_FOLLOW_ELIXIR - (1 if fast else 0))
+            punish = punish and elixir >= GIANT_FOLLOW_ELIXIR - 1
         if "giant" in playable and (elixir >= giant_at or punish):
             lane = self._attack_lane(seen, now if self.p["counter_push"] else None)
             tower_down = self.match is not None and not all(self.match.enemy_alive.values())
@@ -953,7 +961,7 @@ class Brain:
                 order = [c for c in order if c not in ("archers", "minions")] + ["archers", "minions"]
             # garder de quoi défendre l'AUTRE couloir (Chevalier/Canon = 3) : s'il contre-attaque de l'autre côté
             # pendant notre poussée, on ne doit pas être à sec. Sauf s'il est lui-même à sec ou en fin de match
-            reserve = 0 if self.opp_elixir < 3 or mode in ("tout pour l'attaque", "mort subite") else 3
+            reserve = 0 if self.opp_elixir < 3 or mode in ("tout pour l'attaque", "mort subite") else DEFENSE_RESERVE
             for card in order:
                 if card in playable and elixir - DECK[card].cost >= reserve:
                     x, y = _clamp_own(g.x, g.y + 0.07)       # ~4 cases derrière : hors d'une Boule de feu sur le Géant

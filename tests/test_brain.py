@@ -225,20 +225,20 @@ def test_evolved_goblin_barrel_gets_the_valkyrie_and_ui_bars_are_not_units():
 def test_ahead_launches_the_giant_earlier():
     b = brain(edge_push=3, giant_elixir=9)
     b.opp_elixir = 1.5                                   # il vient de tout dépenser
-    d = b.decide([], ["giant", "arrows", "fireball", "cannon"], ALL, 7.0, 100.0)
+    d = b.decide([], ["giant", "arrows", "fireball", "cannon"], ALL, 8.0, 100.0)
     assert d is not None and d.card == "giant" and "avance" in d.reason
     b0 = brain(edge_push=0, giant_elixir=9)
     b0.opp_elixir = 1.5
-    assert b0.decide([], ["giant", "arrows", "fireball", "cannon"], ALL, 7.0, 100.0) is None
+    assert b0.decide([], ["giant", "arrows", "fireball", "cannon"], ALL, 8.0, 100.0) is None
 
 
 def test_behind_holds_the_giant():
     b = brain(edge_push=3, giant_elixir=7)
     b.opp_elixir = 10.0
     seen = [enemy("golem", 9, 3)]                        # il prépare un Golem au fond (8 élixir sur le terrain)
-    d = b.decide(seen, ["giant", "arrows", "fireball", "cannon"], ALL, 7.0, 100.0)
+    d = b.decide(seen, ["giant", "arrows", "fireball", "cannon"], ALL, 8.0, 100.0)
     assert d is None or d.card != "giant"
-    d = brain(edge_push=0, giant_elixir=7).decide(seen, ["giant", "arrows", "fireball", "cannon"], ALL, 7.0, 100.0)
+    d = brain(edge_push=0, giant_elixir=7).decide(seen, ["giant", "arrows", "fireball", "cannon"], ALL, 8.0, 100.0)
     assert d is not None and d.card == "giant"
 
 
@@ -353,7 +353,7 @@ def test_counter_push_behind_a_surviving_defender(old_deck):
     b = brain(counter_support=True, edge_push=0)
     b.played(Decision("knight", 0, *at(3, 22), "défense : goblin -> knight", trade=1.0, push=2.0), 95.0)
     survivor = ours("knight", 3, 20, vy_tiles=-1.0)          # il repart vers le pont
-    d = b.decide([survivor], ["archers", "fireball", "arrows", "cannon"], ALL, 5.0, 100.0)
+    d = b.decide([survivor], ["archers", "fireball", "arrows", "cannon"], ALL, 6.0, 100.0)
     assert d is not None and d.card == "archers" and d.reason.startswith("contre-attaque")
     assert d.y > survivor.y                                    # derrière lui (vers notre Roi)
 
@@ -529,3 +529,18 @@ def test_normal_musketeer_counts_toward_evolution():
     assert b.evo_musketeer()
     b.played(Decision("musketeer", 0, *at(3, 26), "test"), 60.0)
     assert not b.evo_musketeer()
+
+
+def test_giant_only_with_elixir_to_support_it():
+    b = brain(giant_elixir=7, edge_push=0)
+    d = b.decide([], ["giant", "knight", "musketeer", "cannon"], ALL, 7.0, 100.0)
+    assert d is None or d.card != "giant"                # 7 - 5 = 2 : pas de quoi le soutenir
+    d = b.decide([], ["giant", "knight", "musketeer", "cannon"], ALL, 8.2, 100.0)
+    assert d is not None and d.card == "giant"
+
+
+def test_counter_push_keeps_a_defense_reserve():
+    b = brain(counter_support=True, edge_push=0)
+    b.played(Decision("knight", 0, *at(3, 22), "défense : goblin -> knight", trade=1.0, push=2.0), 95.0)
+    d = b.decide([ours("knight", 3, 20, vy_tiles=-1.0)], ["musketeer", "fireball", "minions", "cannon"], ALL, 5.0, 100.0)
+    assert d is None or not d.reason.startswith("contre-attaque")
