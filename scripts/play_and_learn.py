@@ -137,6 +137,18 @@ def finetune(minutes: float) -> None:
             os.replace(MODELS / f"clashai_yolo11s.tmp{ext}", MODELS / f"clashai_yolo11s{ext}")
 
 
+def wake() -> None:
+    """Réveille l'écran du téléphone et remet à zéro son minuteur de veille (touche « réveil », sans toucher au jeu
+    ni aux réglages du téléphone)."""
+    try:
+        sys.path.insert(0, str(ROOT))
+        from clashai.device import ADB
+        subprocess.run([ADB, "shell", "input", "keyevent", "KEYCODE_WAKEUP"], timeout=10,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--games", type=int, default=0, help="0 = sans fin")
@@ -158,6 +170,7 @@ def main():
             # relit en parallèle les matchs pas encore traités pendant qu'on joue le suivant
             labeler = subprocess.Popen([PY, "scripts/double_check.py"], cwd=ROOT, env=ENV,
                                        creationflags=getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0))
+        wake()                              # au cas où l'écran se serait éteint entre deux matchs
         print(f"=== match {g}/{a.games or '∞'} ===", flush=True)
         r = subprocess.run([PY, "scripts/autoplay.py", "--games", "1"] + ([] if a.no_show else ["--show"]),
                            cwd=ROOT, env=ENV)
@@ -173,7 +186,11 @@ def main():
             flag.write_text(game, encoding="utf-8")
             print(f"=== pause revue {game} ===", flush=True)
             t0 = time.time()
+            last_wake = 0.0
             while flag.exists() and time.time() - t0 < a.review_pause * 60:
+                if time.time() - last_wake > 60:
+                    wake()                  # l'écran s'éteint après 10 min sans activité : on le garde allumé
+                    last_wake = time.time()
                 time.sleep(2)
             flag.unlink(missing_ok=True)
             print(f"=== reprise ({'revue faite' if time.time() - t0 < a.review_pause * 60 else 'délai écoulé'}) ===",
