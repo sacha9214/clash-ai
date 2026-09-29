@@ -79,7 +79,7 @@ LATE_S, REGULATION_S = 150.0, 180.0
 PUSH_MEMORY_S = 8.0
 COUNTER_WINDOW_S = 12.0                     # contre-attaque : nos défenseurs posés il y a moins de 12 s
 STURDY_HP = 450                             # PV (niveau 1) d'un défenseur qui vaut la peine d'être soutenu                         # défenses contre la même attaque adverse : créditée une fois
-TANK_DEADLINE_S = 12.0
+TANK_DEADLINE_S = 11.0                      # 12 s laissait les Gargouilles « gagner » contre un Géant (29/09) : il tape la tour avant
 ONE_SHOT_HP = 55                            # PV (niveau 1) qu'un tir de tour princesse suffit à tuer (Squelette, Chauve-souris)
 SPIRITS = {"fire-spirit", "ice-spirit", "electro-spirit", "heal-spirit"}                      # un tank qui vise les bâtiments, du pont à notre tour : ~9 s de marche + 1er coup
 # Valeur d'un sort (élixir détruit) : une unité sur notre moitié frappe déjà nos tours/troupes -> compte plus ;
