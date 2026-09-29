@@ -568,3 +568,9 @@ def test_cannon_always_close_to_the_river_to_pull():
         if d is not None and d.card == "cannon":
             assert d.y <= limit, (u, d.y, d.reason)
             assert 0.4 < d.x < 0.6, (u, d.x)
+
+
+def test_unit_walking_away_in_his_half_is_no_threat():
+    b = brain()
+    d = b.decide([enemy("giant", 3, 14, vy_tiles=-0.8)], ["cannon", "knight", "minions", "fireball"], ALL, 8.0, 100.0)
+    assert d is None or not d.reason.startswith("défense")

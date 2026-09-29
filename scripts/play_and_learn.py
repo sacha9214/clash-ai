@@ -143,7 +143,9 @@ def wake() -> None:
     try:
         sys.path.insert(0, str(ROOT))
         from clashai.device import ADB
-        subprocess.run([ADB, "shell", "input", "keyevent", "KEYCODE_WAKEUP"], timeout=10,
+        # WAKEUP allume l'écran mais ne compte pas comme activité : le verrouillage tombait quand même au bout de
+        # 10 min (29/09). Une touche Maj compte comme activité et ne fait rien dans le jeu.
+        subprocess.run([ADB, "shell", "input", "keyevent", "KEYCODE_WAKEUP", "KEYCODE_SHIFT_LEFT"], timeout=10,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception:
         pass

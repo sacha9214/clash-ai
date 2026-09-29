@@ -436,7 +436,10 @@ class Brain:
                             push=_cost("goblin-barrel"))
         enemies = [e for e in enemies if e.name != "goblin-barrel"]
         threats = [s for s in enemies if s.y > RIVER_Y - self.p['defend_line']   # sur notre moitié ou au pont
-                   and s.name not in SPAWNERS]      # ses bâtiments ne viennent pas : ce qui en sort sera défendu
+                   and s.name not in SPAWNERS       # ses bâtiments ne viennent pas : ce qui en sort sera défendu
+                   # dans SA moitié et qui s'éloigne de nous : aucune menace (29/09 : notre Géant lu « ennemi » juste
+                   # après le pont -> Canon + Chevalier contre notre propre Géant)
+                   and not (s.y < RIVER_Y and s.vy < -0.3 * PHONE.th)]
 
         d = self._finish_tower(playable)
         if d:
