@@ -362,6 +362,7 @@ class Brain:
         (sinon, pendant le délai entre deux cartes, chaque décision non jouée créait des troupes virtuelles fantômes)."""
         seen = self._fix_sides(seen, now)
         seen = seen + self._virtual_units(seen, now)
+        self.last_seen = seen                   # ce que le cerveau voit après ses corrections (journal : diagnostic)
         self._ours = [s for s in seen if not s.enemy]
         # élixir déjà engagé sur le terrain (un Géant qui avance compte encore 5 pour nous)
         self._board = sum(_unit_value(s.name) * (-1 if s.enemy else 1) for s in seen)

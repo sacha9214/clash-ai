@@ -315,7 +315,10 @@ class Agent:
                 log.append({"t": round(now, 2), "card": d.card, "x": round(d.x, 3), "y": round(d.y, 3), "tile": d.tile,
                             "reason": d.reason, "ok": ok, "play_ms": play_ms, "elixir": el, "hand": hand,
                             "opp_elixir": round(self.opp.elixir, 1), "trade": d.trade,
-                            "units": [(u.name, u.enemy, u.center) for u in units]})
+                            "units": [(u.name, u.enemy, u.center) for u in units],
+                            # après les corrections de camp du cerveau (notre Géant lu « ennemi » ? -> visible ici)
+                            "seen": [(s.name, s.enemy, round(s.x, 3), round(s.y, 3))
+                                     for s in getattr(self.brain, "last_seen", [])]})
                 if ok:
                     last_play = time.time()
                     self.brain.played(d, last_play)   # le cerveau ne retient que les cartes vraiment posées
