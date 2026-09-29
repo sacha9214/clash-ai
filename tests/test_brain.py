@@ -615,3 +615,9 @@ def test_stat_defense_never_picks_the_cannon_against_a_crowd():
     seen = [enemy("barbarian", 3, 20 + i % 2) for i in range(3)]
     d = b.decide(seen, ["cannon", "minions", "mini-pekka", "fireball"], ALL, 8.0, 100.0)
     assert d is None or d.card != "cannon"
+
+
+def test_no_cannon_against_a_single_visible_barbarian():
+    b = brain()
+    d = b.decide([enemy("barbarian", 3, 20)], ["cannon", "knight", "minions", "fireball"], ALL, 8.0, 100.0)
+    assert d is None or d.card != "cannon"

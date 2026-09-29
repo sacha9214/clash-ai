@@ -753,7 +753,7 @@ class Brain:
         for card in playable:
             if card not in DECK or DECK[card].kind == "spell" or card == "giant":
                 continue
-            if card == "cannon" and len(group) >= 3:
+            if card == "cannon" and (len(group) >= 3 or card_info.combat(t.name)["count"] >= 3):
                 continue                # le Canon tire sur 1 cible à la fois : inutile contre une nuée (29/09 : Barbares)
             if t.name in AIR_UNITS and not card_info.combat(card)["hits_air"]:
                 continue                # ne peut pas les toucher (Mini P.E.K.K.A contre des Gargouilles) : élixir perdu
@@ -860,7 +860,9 @@ class Brain:
                             precise=True, trade=self._trade("musketeer", group, True, push_cost), push=push_cost)
         # Canon : le bâtiment au centre attire les tanks (Géant, Hog…) entre les deux tours
         if "cannon" in playable and not is_air and (is_tank or t.name in FAST_BUILDING_HUNTERS or t.name in SINGLE_MELEE
-                                                     or _cost(t.name) >= 3)                 and len(group) < 3:   # pas contre les nuées (5 Barbares) : le Canon tire sur 1 cible à la fois
+                                                     or _cost(t.name) >= 3)                 and len(group) < 3 and card_info.combat(t.name)["count"] < 3:
+            # pas contre les nuées (5 Barbares) : le Canon tire sur 1 cible à la fois. D'après la CARTE, pas d'après ce
+            # que voit le scanner (29/09 : 1 Barbare vu sur 5 -> Canon posé 4 fois)
             col = 8 if lane_x < 0.5 else 9             # centre, côté de la menace
             if t.name in FAST_BUILDING_HUNTERS:
                 row, why = OWN_FIRST_ROW + 4, "4 cases sous la rivière : le Cochon est dévié entre les 2 tours"
