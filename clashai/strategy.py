@@ -203,6 +203,10 @@ def archetype(deck: list[str]) -> str:
 
 
 def load_ctx() -> dict:
+    seed = STATS.parents[1] / "learning/strategy_ctx.json"     # état versionné (comme load() pour strategy_stats)
+    if not CTX_STATS.exists() and seed.exists():
+        CTX_STATS.parent.mkdir(parents=True, exist_ok=True)
+        CTX_STATS.write_text(seed.read_text(encoding="utf-8"), encoding="utf-8")
     return json.loads(CTX_STATS.read_text(encoding="utf-8")) if CTX_STATS.exists() else {}
 
 
