@@ -125,7 +125,9 @@ def main():
                 summary["counted"] = ours and end is not None
                 cv2.imwrite(os.path.join(a.out, gid, "end.jpg"), end if end is not None else dev.frame()[0])
                 if summary["counted"]:
-                    ST.record(stats, params, summary["result"])
+                    ST.record(stats, summary["params"], summary["result"])   # paramètres réellement joués
+                    ctx = summary.get("ctx") or ST.archetype(summary.get("enemy_deck") or [])
+                    ST.record_ctx(ST.load_ctx(), ctx, summary["params"], summary["result"])
                 with open(journal, "a") as f:
                     f.write(json.dumps(summary) + "\n")
                 print("   ", summary, flush=True)

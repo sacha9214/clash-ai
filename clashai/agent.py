@@ -50,6 +50,7 @@ class StreamLost(RuntimeError):
 
 
 class Agent:
+    ctx: str | None = None                       # type du deck adverse de la partie en cours
     STALL_S = 5.0          # plus aucune nouvelle image depuis ce délai : le flux est mort
 
     def __init__(self, out: str = "runs/games", show: bool = False):
@@ -80,6 +81,12 @@ class Agent:
         self._opp_update(raw, now, img.shape[0])
         self.brain.opp_elixir = self.opp.elixir
         self.brain.opp_hand, self.brain.opp_deck = self.opp.hand, self.opp.deck
+        if self.ctx is None and len(self.opp.deck) >= 4:
+            # son type de deck est reconnu : on reprend la stratégie qui a le mieux marché contre ce type
+            from clashai import strategy as ST
+            self.ctx = ST.archetype(self.opp.deck)
+            self.brain.p.update(ST.choose_for(self.ctx, ST.load(), ST.load_ctx()))
+            print(f"   adversaire de type « {self.ctx} » : stratégie apprise contre ce type", flush=True)
         d = self.brain.decide(seen, hand, ready, el, now)
         info = [f"elixir {el:.1f}  main : " + ", ".join(c or "?" for c in hand), self.match.summary(),
                 f"avance {el - self.opp.elixir:+.1f} (lui ~{self.opp.elixir:.1f})  echanges (estime) {self.brain.trade_balance:+.1f}"]
@@ -218,6 +225,7 @@ class Agent:
     def play_battle(self, dev, game_id: str, params: dict | None = None) -> dict:
         """Joue un combat jusqu'au bout avec la variante de stratégie `params`."""
         self.brain = Brain(params)
+        self.ctx = None                          # type du deck adverse, reconnu en cours de partie
         self.opp, self.opp_log = Opponent(), []
         self.spells_pending, self.spells_log = [], []
         self.perf, self.perf_log = {"det_ms": 0.0}, []
@@ -310,4 +318,4 @@ class Agent:
             json.dump({"played": self.opp_log, "deck": self.opp.deck}, f, indent=1)
         return {"game": game_id, "played": n, "refused": refused, "params": self.brain.p,
                 "trade_balance": self.brain.trade_balance,
-                "enemy_deck": self.opp.deck}
+                "enemy_deck": self.opp.deck, "ctx": self.ctx}

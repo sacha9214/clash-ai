@@ -209,3 +209,29 @@ def test_factorized_learns_faster_than_whole_combinations(param, good):
     assert min(new) >= 0.6, new                  # la bonne valeur est jouée la plupart du temps
     assert sum(new) / len(new) >= 0.8, new
     assert sum(new) / len(new) > sum(old) / len(old) + 0.15, (new, old)
+
+
+def test_archetype_of_opponent_decks():
+    assert ST.archetype(["mortar", "knight", "archers", "zap"]) == "siege"
+    assert ST.archetype(["minions", "baby-dragon", "knight", "zap"]) == "air"
+    assert ST.archetype(["golem", "knight", "archers", "zap"]) == "tank"
+    assert ST.archetype(["hog-rider", "bandit", "knight", "zap"]) == "bridge"
+    assert ST.archetype(["knight", "archers", "zap", "fireball"]) == "mixed"
+
+
+def test_choose_for_context_follows_what_won_against_that_type():
+    stats = {}
+    p = ST.choose(stats, rng=random.Random(0))
+    ctx_stats = {}
+    good = dict(p, giant_elixir=9)
+    bad = dict(p, giant_elixir=7)
+    for _ in range(15):
+        ctx_stats.setdefault("bridge", {})
+        e1 = ctx_stats["bridge"].setdefault(ST._key(ST.complete(good)), {"params": ST.complete(good), "wins": 0, "losses": 0})
+        e1["wins"] += 1
+        e2 = ctx_stats["bridge"].setdefault(ST._key(ST.complete(bad)), {"params": ST.complete(bad), "wins": 0, "losses": 0})
+        e2["losses"] += 1
+    picks = [ST.choose_for("bridge", stats, ctx_stats, rng=random.Random(s))["giant_elixir"] for s in range(20)]
+    assert picks.count(9) > picks.count(7)
+    for k, v in ST.PINNED.items():
+        assert ST.choose_for("bridge", stats, ctx_stats)[k] == v

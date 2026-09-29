@@ -56,6 +56,33 @@ def main():
                   f"pire {max(p['loop_ms'] for p in P)} ms")
     reasons = collections.Counter(r["reason"].split(" ->")[0].split(" (")[0].split(" [")[0] for r in L)
     print("raisons principales :", reasons.most_common(6))
+    lessons(g, res, L, ghosts)
+
+
+def lessons(g, res: dict, L: list[dict], ghosts) -> None:
+    """Bilan de la partie (pourquoi gagné / perdu) ajouté à runs/lessons.jsonl, puis ce qui ressort PAR TYPE
+    d'adversaire sur toutes les parties : l'IA réutilise la stratégie gagnante par type (strategy.choose_for)."""
+    from clashai import strategy as ST
+    ctx = res.get("ctx") or ST.archetype(res.get("enemy_deck") or [])
+    cost = {c: v.cost for c, v in __import__("clashai.cards", fromlist=["DECK"]).DECK.items()}
+    slowed = [r for r in L if "ralentit seulement" in r["reason"]]
+    rec = {"game": g.name, "result": res.get("result"), "ctx": ctx, "deck": res.get("enemy_deck"),
+           "trade": res.get("trade_balance"), "giants": sum(r["card"] == "giant" for r in L),
+           "ghost_defenses": sum(ghosts.values()), "elixir_on_ghosts": 0,
+           "slowed_only": len(slowed), "elixir_slowed_only": sum(cost.get(r["card"], 0) for r in slowed)}
+    f = ROOT / "runs/lessons.jsonl"
+    old = [json.loads(l) for l in open(f, encoding="utf-8")] if f.exists() else []
+    old = [o for o in old if o["game"] != g.name] + [rec]
+    f.write_text("".join(json.dumps(o) + "\n" for o in old), encoding="utf-8")
+    same = [o for o in old if o["ctx"] == ctx and o["result"] in ("win", "loss")]
+    w = sum(o["result"] == "win" for o in same)
+    print(f"leçon : adversaire « {ctx} » — {w}/{len(same)} victoires contre ce type sur les parties analysées")
+    for key, label in (("giants", "Géants posés"), ("slowed_only", "défenses qui ne font que ralentir"),
+                       ("ghost_defenses", "défenses contre des fantômes")):
+        wins = [o[key] for o in same if o["result"] == "win"]
+        losses = [o[key] for o in same if o["result"] == "loss"]
+        if wins and losses:
+            print(f"   {label} : {st.mean(wins):.1f} par victoire, {st.mean(losses):.1f} par défaite")
 
 
 if __name__ == "__main__":

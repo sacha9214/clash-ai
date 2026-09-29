@@ -168,3 +168,71 @@ def param_table(stats: dict) -> dict[str, list[tuple[object, int, int, float]]]:
         rows = [(v, *counts[k].get(v, (0, 0))) for v in vals]
         table[k] = sorted(((v, w, l, (w + a) / (w + l + a + b)) for v, w, l in rows), key=lambda r: -r[3])
     return table
+
+
+# ---- apprendre PAR TYPE D'ADVERSAIRE : ce qui gagne contre un deck aérien n'est pas ce qui gagne contre un tank ----
+CTX_STATS = STATS.with_name("strategy_ctx.json")
+AIR_CARDS = {"minions", "minion-horde", "bats", "mega-minion", "baby-dragon", "skeleton-dragons", "electro-dragon",
+             "inferno-dragon", "balloon", "lava-hound", "flying-machine", "phoenix"}
+SWARM_CARDS = {"goblins", "spear-goblins", "goblin-gang", "skeletons", "skeleton-army", "barbarians", "rascals",
+               "goblin-hut", "tombstone", "barbarian-hut", "furnace", "guards", "royal-recruits", "elite-barbarians"}
+TANK_CARDS = {"golem", "giant", "pekka", "electro-giant", "goblin-giant", "royal-giant", "mega-knight", "lava-hound",
+              "elixir-golem", "ice-golem"}
+BRIDGE_CARDS = {"hog-rider", "battle-ram", "bandit", "royal-hogs", "ram-rider", "dark-prince", "prince", "mini-pekka",
+                "lumberjack", "goblin-barrel", "wall-breakers"}
+SIEGE_CARDS = {"mortar", "x-bow"}
+CONTEXTS = ("siege", "air", "tank", "bridge", "swarm", "mixed")
+
+
+def archetype(deck: list[str]) -> str:
+    """Type du deck adverse (vu en cours de partie) : siège, aérien, tank, pression au pont, nuées, mixte."""
+    d = set(deck)
+    if d & SIEGE_CARDS:
+        return "siege"
+    if len(d & AIR_CARDS) >= 2:
+        return "air"
+    if d & (TANK_CARDS - {"ice-golem"}):
+        return "tank"
+    if len(d & BRIDGE_CARDS) >= 2:
+        return "bridge"
+    if len(d & SWARM_CARDS) >= 3:
+        return "swarm"
+    return "mixed"
+
+
+def load_ctx() -> dict:
+    return json.loads(CTX_STATS.read_text(encoding="utf-8")) if CTX_STATS.exists() else {}
+
+
+def choose_for(ctx: str, stats: dict, ctx_stats: dict, rng: random.Random | None = None) -> dict:
+    """Thompson par paramètre sur les parties CONTRE CE TYPE de deck ; a priori = taux global de chaque valeur
+    (pesant PRIOR_N parties) : peu de parties de ce type -> on joue comme d'habitude, puis on s'en écarte."""
+    rng = rng or random
+    g, gw, gl = _counts(stats)
+    c, _, _ = _counts(normalize(ctx_stats.get(ctx, {})))
+    base = (gw + 1) / (gw + gl + 2)
+    p = dict(DEFAULT)
+    for k, vals in SPACE.items():
+        best, pick = -1.0, vals[0]
+        for v in vals:
+            w0, l0 = g[k].get(v, (0, 0))
+            rate = (w0 + PRIOR_N * base) / (w0 + l0 + PRIOR_N)
+            w, l = c[k].get(v, (0, 0))
+            x = rng.betavariate(w + PRIOR_N * rate, l + PRIOR_N * (1 - rate))
+            if x > best:
+                best, pick = x, v
+        p[k] = pick
+    p.update(PINNED)
+    return p
+
+
+def record_ctx(ctx_stats: dict, ctx: str, params: dict, result: str) -> None:
+    s = ctx_stats.setdefault(ctx, {})
+    p = complete(params)
+    e = s.setdefault(_key(p), {"params": p, "wins": 0, "losses": 0})
+    if result == "win":
+        e["wins"] += 1
+    elif result == "loss":
+        e["losses"] += 1
+    CTX_STATS.parent.mkdir(parents=True, exist_ok=True)
+    CTX_STATS.write_text(json.dumps(ctx_stats, indent=1), encoding="utf-8")
