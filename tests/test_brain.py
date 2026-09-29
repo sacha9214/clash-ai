@@ -647,3 +647,10 @@ def test_minions_not_sent_on_skeleton_dragons():
     d = b.decide([enemy("skeleton-dragon", 3, 21), enemy("skeleton-dragon", 4, 21)],
                  ["minions", "musketeer", "knight", "cannon"], ALL, 8.0, 100.0)
     assert d is None or d.card != "minions"
+
+
+def test_minions_never_sent_on_a_wizard_even_as_fallback():
+    for hand in (["minions", "giant", "fireball", "cannon"], ["minions", "knight", "giant", "fireball"]):
+        b = brain()
+        d = b.decide([enemy("wizard", 3, 21)], hand, ALL, 5.0, 100.0)
+        assert d is None or d.card != "minions", hand

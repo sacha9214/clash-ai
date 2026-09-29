@@ -884,6 +884,14 @@ class Brain:
             if d:
                 return d
         fits = [c for c in order if c in playable and c in DECK]
+        # une nuée fragile (Gargouilles) contre des dégâts de zone qui touchent sa couche (Sorcier, Dragons squelettes,
+        # Bourreau…) meurt d'un coup : jamais, même en secours (29/09 : Gargouilles sur un Sorcier)
+        def splashed(c):
+            me = card_info.combat(c)
+            return me["count"] >= 3 and any(
+                card_info.combat(g.name)["splash"] and (card_info.combat(g.name)["hits_air"] if me["flying"]
+                                                        else card_info.combat(g.name)["hits_ground"]) for g in group)
+        fits = [c for c in fits if not splashed(c)]
         cheap = [c for c in fits if DECK[c].cost <= push_cost + 1]
         for card in cheap or sorted(fits, key=lambda c: DECK[c].cost):   # sinon, au moins la moins chère
             c = DECK[card]
