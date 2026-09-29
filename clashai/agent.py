@@ -312,7 +312,7 @@ class Agent:
                     self.opp.note_our_spell(time.time(), d.x * w, d.y * h, card=d.card)
                     # vol mesuré depuis la DÉCISION : c'est ce délai que brain.SPELL_IMPACT_S doit prévoir
                     self.spells_pending.append({"card": d.card, "x": d.x, "y": d.y, "t_tap": now, "reason": d.reason})
-                log.append({"t": round(now, 2), "card": d.card, "x": round(d.x, 3), "y": round(d.y, 3), "tile": d.tile,
+                log.append({"t": round(now, 2), "card": d.card, "slot": d.slot, "x": round(d.x, 3), "y": round(d.y, 3), "tile": d.tile,
                             "reason": d.reason, "ok": ok, "play_ms": play_ms, "elixir": el, "hand": hand,
                             "opp_elixir": round(self.opp.elixir, 1), "trade": d.trade,
                             "units": [(u.name, u.enemy, u.center) for u in units],
