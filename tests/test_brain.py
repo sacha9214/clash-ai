@@ -544,3 +544,9 @@ def test_counter_push_keeps_a_defense_reserve():
     b.played(Decision("knight", 0, *at(3, 22), "défense : goblin -> knight", trade=1.0, push=2.0), 95.0)
     d = b.decide([ours("knight", 3, 20, vy_tiles=-1.0)], ["musketeer", "fireball", "minions", "cannon"], ALL, 5.0, 100.0)
     assert d is None or not d.reason.startswith("contre-attaque")
+
+
+def test_no_cycling_below_the_giant_threshold():
+    b = brain(cycle_at=7.0, giant_elixir=7, edge_push=0)
+    d = b.decide([], ["minions", "knight", "giant", "cannon"], ALL, 7.2, 100.0)
+    assert d is None                                     # on garde l'élixir pour le Géant

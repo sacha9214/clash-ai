@@ -561,7 +561,9 @@ class Brain:
         """Élixir à partir duquel on joue plutôt que de perdre de l'élixir. La barre se lit au plus ~9.5 :
         un seuil à 10 n'était jamais atteint (l'IA restait pleine sans rien faire)."""
         fast = self.match is not None and self.match.phase(now) != "normal"
-        return min(self.p["cycle_at"], 9.4) - (1.5 if fast else 0)
+        # jamais sous le seuil du Géant : sinon on « fait tourner » une carte à 7 et le Géant (8) ne sort jamais
+        # (29/09 : un seul Géant de la partie)
+        return max(min(self.p["cycle_at"], 9.4) - (1.5 if fast else 0), GIANT_FOLLOW_ELIXIR + 0.5 - (1 if fast else 0))
 
     def _finish_tower(self, playable: dict) -> Decision | None:
         """Une tour ennemie presque morte : le sort qui l'achève à coup sûr = une couronne (si la lecture de ses PV a
