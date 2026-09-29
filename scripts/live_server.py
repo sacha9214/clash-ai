@@ -26,7 +26,8 @@ PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
  :root { --bg:#10131a; --fg:#e8ecf3; --mut:#8a93a6; --ok:#3fb950; --bad:#f85149; --card:#1a1f2b; }
  body { margin:0; background:var(--bg); color:var(--fg); font:15px system-ui, sans-serif; }
  main { display:flex; gap:20px; padding:16px; flex-wrap:wrap; justify-content:center; }
- img { max-height:88vh; max-width:100%; border-radius:10px; background:#000; }
+ img { max-height:88vh; max-width:100%; min-width:280px; min-height:400px; border-radius:10px; background:#000; }
+ img:not([src]) { visibility:hidden; }
  .side { min-width:260px; max-width:420px; flex:1; }
  .card { background:var(--card); border-radius:10px; padding:12px 14px; margin-bottom:12px; }
  h1 { font-size:18px; margin:0 0 8px; } .mut { color:var(--mut); font-size:13px; }
@@ -39,10 +40,21 @@ PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
  <div class="card"><h1>Derniers événements</h1><pre id="log">…</pre></div>
 </div></main>
 <script>
+let lastAge = null, loading = false;
+function refreshImage(s) {
+  // image chargée en arrière-plan puis échangée d'un coup : pas de clignotement ; rien tant qu'il n'y a pas d'image
+  if (s.image_age == null || loading || s.image_age === lastAge && s.image_age > 3) return;
+  loading = true;
+  const img = new Image();
+  img.onload = () => { document.getElementById('live').src = img.src; loading = false; };
+  img.onerror = () => { loading = false; };
+  img.src = '/live.jpg?t=' + Date.now();
+  lastAge = s.image_age;
+}
 async function tick() {
-  document.getElementById('live').src = '/live.jpg?t=' + Date.now();
   try {
     const s = await (await fetch('/status')).json();
+    refreshImage(s);
     document.getElementById('state').textContent = s.state;
     document.getElementById('age').textContent = s.image_age == null ? 'pas encore d\\'image'
         : 'image d\\'il y a ' + s.image_age + ' s';
