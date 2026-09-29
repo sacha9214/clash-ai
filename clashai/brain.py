@@ -59,6 +59,7 @@ WIN_CONDITIONS = {"giant", "hog-rider", "royal-giant", "golem", "pekka", "balloo
 # s'est trompé de camp (match du 25/09 : Géant ennemi vu « à nous » -> « soutien derrière le Géant » fantôme)
 OWN_UNIT_LIFE_S = 40.0
 MUSKETEER_BONUS = 1.5                       # préférence pour la Mousquetaire en défense (voir _stat_pick)
+DEFENSE_WAIT_WIN_S = 7.0                    # … et 7 s si le 1er défenseur est donné gagnant
 DEFENSE_WAIT_S = 4.0                        # après une défense : pas de 2e carte sur la même attaque avant 4 s
 DEFENSE_RESERVE = 3                         # élixir toujours gardé pour défendre (Chevalier / Canon)
 GIANT_FOLLOW_ELIXIR = 8                     # Géant (5) + de quoi le soutenir (3) : sinon on ne le lance pas
@@ -393,7 +394,10 @@ class Brain:
         virtuelles, couloir de sa dernière troupe)."""
         card = DECK[d.card]
         if d.reason.startswith("défense") and card.kind != "spell":
-            self.last_defense = (now, _lane(d.x), DECK[d.card].cost + 2)   # instant, couloir, attaque couverte (~)
+            # un défenseur donné GAGNANT par les stats a besoin de temps (Mini P.E.K.K.A sur un Géant : ~10 s) :
+            # on attend plus longtemps avant d'en rajouter (29/09 : Valkyrie ajoutée 4,1 s après)
+            wait = DEFENSE_WAIT_WIN_S if "gagne en" in d.reason else DEFENSE_WAIT_S
+            self.last_defense = (now + wait - DEFENSE_WAIT_S, _lane(d.x), DECK[d.card].cost + 2)
         if d.card == "musketeer":
             self.musk_plays += 1
         if d.trade is not None:
