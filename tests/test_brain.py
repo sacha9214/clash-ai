@@ -510,3 +510,22 @@ def test_our_minions_from_the_centre_read_as_enemy_in_a_lane_are_ours():
     d = b.decide([enemy("minion", 4, 22), enemy("minion", 4, 23)], ["knight", "cannon", "valkyrie", "fireball"],
                  ALL, 8.0, 100.0)
     assert d is None or not d.reason.startswith("défense : minion")
+
+
+def test_evolved_musketeer_snipes_a_lane_push_from_behind_the_tower():
+    b = brain()
+    b.musk_plays = 2                                     # 3e pose : évoluée
+    seen = [enemy("giant", 3, 20), enemy("wizard", 3, 17)]
+    d = b.decide(seen, ["musketeer", "knight", "cannon", "fireball"], ALL, 8.0, 100.0)
+    assert d is not None and d.card == "musketeer" and "évoluée" in d.reason
+    from clashai.brain import OWN_TOWER_Y
+    assert d.y > OWN_TOWER_Y                             # derrière la tour
+
+
+def test_normal_musketeer_counts_toward_evolution():
+    b = brain()
+    for i in range(2):
+        b.played(Decision("musketeer", 0, *at(3, 26), "test"), 50.0 + i)
+    assert b.evo_musketeer()
+    b.played(Decision("musketeer", 0, *at(3, 26), "test"), 60.0)
+    assert not b.evo_musketeer()

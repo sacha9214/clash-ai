@@ -210,6 +210,7 @@ class Brain:
             self.placer = load()
         self.own_recent: list[tuple[tuple[str, ...], float, float, float]] = []   # (unités, x, y, instant) posées par nous
         self.own_lane: dict[str, int] = {}      # unité -> couloir de sa dernière pose
+        self.musk_plays = 0                     # poses de notre Mousquetaire : la 3e, 6e… est ÉVOLUÉE (Cycles 2)
         self.own_played: dict[str, float] = {}   # unité -> dernier instant où l'on a posé sa carte
         self.trades: list[tuple[float, float]] = []   # (instant, élixir gagné) de chaque échange vraiment joué
         self._credited: list[tuple[float, int]] = []    # (instant, couloir) des attaques adverses déjà créditées
@@ -372,6 +373,8 @@ class Brain:
         """La carte de `d` est vraiment posée (tap vérifié) : l'IA s'en souvient (camp de ses unités, troupes
         virtuelles, couloir de sa dernière troupe)."""
         card = DECK[d.card]
+        if d.card == "musketeer":
+            self.musk_plays += 1
         if d.trade is not None:
             trade = d.trade
             if d.push:
@@ -654,6 +657,10 @@ class Brain:
     def _impact_time(card: str, x: float, y: float) -> float:
         return SPELL_IMPACT_S.get(card, 2.0)
 
+    def evo_musketeer(self) -> bool:
+        """La prochaine Mousquetaire posée est évoluée : 2 poses normales chargent l'évolution, la 3e est évoluée."""
+        return self.musk_plays % 3 == 2
+
     @staticmethod
     def _duel(card: str, group: list[Seen], near_tower: bool) -> tuple[bool, float, float] | None:
         """Combat estimé entre notre carte et le groupe ennemi : (gagne ?, marge en s, temps pour tout tuer).
@@ -723,7 +730,18 @@ class Brain:
             if spare:
                 options = spare
         options.sort()
+        if self.evo_musketeer() and "musketeer" in playable and len(group) >= 2 and t.name not in AIR_UNITS | {"balloon"}:
+            # Mousquetaire ÉVOLUÉE : 3 tirs de sniper (portée 6-30 cases, 2 cases de large) qui TRAVERSENT tout ce qui
+            # est aligné -> la meilleure réponse à un groupe qui descend un couloir (tank + soutien)
+            options = [o for o in options if o[5] == "musketeer"] or options
         lose, pricey, _, neg_margin, cost, card, t_kill = options[0]
+        if card == "musketeer" and self.evo_musketeer():
+            # en retrait derrière notre tour, dans l'axe du couloir : ses tirs remontent le couloir et percent la file
+            lane_x = LANES_X[_lane(t.x)]
+            x, y = _clamp_own(lane_x, OWN_TOWER_Y + 0.06)
+            return Decision(card, playable[card], x, y,
+                            f"défense : {t.name} x{len(group)} -> Mousquetaire évoluée derrière la tour (sniper le long du couloir)",
+                            precise=True, trade=self._trade(card, group, True, push_cost), push=push_cost)
         if lose and pricey:
             return None                                     # rien ne gagne à bon prix : la tour encaisse
         if lose and not near_tower and t.name not in TANK_UNITS:
@@ -784,6 +802,13 @@ class Brain:
         push_cost = sum(_cost(n) for n in {s.name for s in threats if math.hypot(s.x - t.x, s.y - t.y) < 0.2})
         group = [s for s in threats if _tile_dist(s.x, s.y, t.x, t.y) < 4]
         near_tower = t.y > OWN_TOWER_Y - 0.1
+        if self.evo_musketeer() and "musketeer" in playable and len(group) >= 2 and not is_air and t.name != "balloon":
+            # Mousquetaire ÉVOLUÉE avant le Canon : ses 3 tirs de sniper percent toute la file (tank + soutien)
+            lane_x = LANES_X[_lane(t.x)]
+            x, y = _clamp_own(lane_x, OWN_TOWER_Y + 0.06)
+            return Decision("musketeer", playable["musketeer"], x, y,
+                            f"défense : {t.name} x{len(group)} -> Mousquetaire évoluée derrière la tour (sniper le long du couloir)",
+                            precise=True, trade=self._trade("musketeer", group, True, push_cost), push=push_cost)
         # Canon : le bâtiment au centre attire les tanks (Géant, Hog…) entre les deux tours
         if "cannon" in playable and not is_air and (is_tank or t.name in FAST_BUILDING_HUNTERS or t.name in SINGLE_MELEE
                                                      or _cost(t.name) >= 3):   # pas contre les nuées : 1 cible à la fois
