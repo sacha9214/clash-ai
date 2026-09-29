@@ -145,8 +145,13 @@ def wake() -> None:
         from clashai.device import ADB
         # WAKEUP allume l'écran mais ne compte pas comme activité : le verrouillage tombait quand même au bout de
         # 10 min (29/09). Une touche Maj compte comme activité et ne fait rien dans le jeu.
-        subprocess.run([ADB, "shell", "input", "keyevent", "KEYCODE_WAKEUP", "KEYCODE_SHIFT_LEFT"], timeout=10,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # les touches ne suffisaient pas (verrouillage au bout de 10 min, 29/09) : un vrai geste à l'écran. Sur
+        # l'accueil de Clash, glisser à droite puis à gauche change d'onglet et revient sur « Combat »
+        q = dict(timeout=10, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run([ADB, "shell", "input", "keyevent", "KEYCODE_WAKEUP"], **q)
+        subprocess.run([ADB, "shell", "input", "swipe", "350", "1350", "850", "1350", "250"], **q)
+        time.sleep(0.8)
+        subprocess.run([ADB, "shell", "input", "swipe", "850", "1350", "350", "1350", "250"], **q)
     except Exception:
         pass
 

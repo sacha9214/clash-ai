@@ -9,6 +9,7 @@ import time
 import unicodedata
 
 import cv2
+from pathlib import Path
 
 from clashai import battle as B
 from clashai import hand as H
@@ -48,6 +49,8 @@ COSTS = {card: cost for card, cost, _ in UNIT2CARD.values()}
 class StreamLost(RuntimeError):
     """Le flux vidéo ne donne plus d'image : téléphone débranché ou serveur scrcpy arrêté."""
 
+
+LIVE_DIR = Path(__file__).resolve().parents[1] / "runs"   # runs/live.jpg : suivi à distance
 
 class Agent:
     ctx: str | None = None                       # type du deck adverse de la partie en cours
@@ -108,6 +111,16 @@ class Agent:
                 time.sleep(0.01)
                 continue
             view = self.annotate(*job)
+            if time.time() - getattr(self, "_live_t", 0) > 1.0:
+                # image « en direct » pour la page de suivi à distance (scripts/live_server.py)
+                self._live_t = time.time()
+                live = LIVE_DIR / "live.jpg"
+                cv2.imwrite(str(live.with_suffix(".tmp.jpg")), cv2.resize(view, (view.shape[1] // 2, view.shape[0] // 2)),
+                            [cv2.IMWRITE_JPEG_QUALITY, 70])
+                try:
+                    os.replace(live.with_suffix(".tmp.jpg"), live)
+                except OSError:
+                    pass
             cv2.imshow("Clash AI", cv2.resize(view, (int(view.shape[1] * 1.25), int(view.shape[0] * 1.25))))
             cv2.waitKey(1)
 
