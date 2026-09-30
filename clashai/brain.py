@@ -334,8 +334,13 @@ class Brain:
         out = []
         for s in seen:
             base = s.name.replace("-evolution", "")
-            if s.enemy and s.y > RIVER_Y and any(s.name in names and _tile_dist(s.x, s.y, x, y) < (5 if s.name in TALL_UNITS else 4)
-                                                 for names, x, y, _ in self.own_recent):
+            if s.enemy and s.y > RIVER_Y and any(
+                    s.name in names and (_tile_dist(s.x, s.y, x, y) < (5 if s.name in TALL_UNITS else 4)
+                                         # même couloir, dans notre moitié, < 6 s, carte qu'il n'a jamais jouée :
+                                         # c'est la nôtre ou un fantôme d'elle (30/09 : « Géant ennemi » sur notre tour
+                                         # 2 s après notre pose, en début de partie -> Mini P.E.K.K.A gâché)
+                                         or (_lane(s.x) == _lane(x) and unit_card.get(s.name) not in self.opp_deck))
+                    for names, x, y, _ in self.own_recent):
                 # NOTRE unité fraîchement posée prise pour une ennemie (ex. notre Géant « ennemi » sur sa case de pose)
                 s = Seen(s.name, False, s.x, s.y, s.vx, s.vy)
             elif s.enemy and (any(v["name"] == base and now < v["until"]

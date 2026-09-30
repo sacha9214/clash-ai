@@ -781,3 +781,11 @@ def test_goblin_barrel_without_valkyrie_gets_a_fireball_on_the_landing():
     b.opp_deck = ["goblin-barrel", "knight", "archers", "skeletons", "fireball", "giant", "minions", "zap"]
     d = b.decide([enemy("goblin-barrel", 3, 16)], ["fireball", "knight", "cannon", "giant"], ALL, 6.0, 100.0)
     assert d is not None and d.card == "fireball" and "Tonneau" in d.reason
+
+
+def test_ghost_of_our_fresh_giant_on_our_tower_early_game():
+    from clashai.brain import Seen
+    b = brain()
+    b.played(Decision("giant", 0, 0.151, 0.486, "attaque : Géant"), 100.0)
+    s = [Seen("giant", True, 0.147, 0.495), Seen("giant", True, 0.138, 0.578)]
+    assert all(not x.enemy for x in b._fix_sides(s, 102.0))
