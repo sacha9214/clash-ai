@@ -50,7 +50,8 @@ class StreamLost(RuntimeError):
     """Le flux vidéo ne donne plus d'image : téléphone débranché ou serveur scrcpy arrêté."""
 
 
-LIVE_DIR = Path(__file__).resolve().parents[1] / "runs"   # runs/live.jpg : suivi à distance
+LIVE_DIR = Path(__file__).resolve().parents[1] / "runs"
+EMOTE_CHAT = (0.097, 0.89)     # bulle de discussion, en bas à gauche pendant un combat   # runs/live.jpg : suivi à distance
 
 class Agent:
     ctx: str | None = None                       # type du deck adverse de la partie en cours
@@ -123,6 +124,30 @@ class Agent:
                     pass
             cv2.imshow("Clash AI", cv2.resize(view, (int(view.shape[1] * 1.25), int(view.shape[0] * 1.25))))
             cv2.waitKey(1)
+
+    def _emotes(self, dev, img, now):
+        """Messages rapides pour faire plus humain : « Bonne chance » au début, « Bien joué » vers la fin.
+        Positions dans data/emotes.json ; sans ce fichier, on ouvre le menu une fois et on en garde une capture
+        (runs/emote_menu.jpg) pour régler les positions."""
+        cfg_f = Path(__file__).resolve().parents[1] / "data/emotes.json"
+        t = now - self._emote_t0
+        if not cfg_f.exists():
+            if "calib" not in self._emotes_done and t > 4:
+                self._emotes_done.add("calib")
+                dev.tap(*B.px(img, *EMOTE_CHAT))
+                time.sleep(0.8)
+                shot = dev.frame()[0]
+                if shot is not None:
+                    cv2.imwrite(str(LIVE_DIR / "emote_menu.jpg"), shot)
+                dev.tap(*B.px(img, *EMOTE_CHAT))                  # referme le menu
+            return
+        cfg = json.loads(cfg_f.read_text(encoding="utf-8"))
+        for key, when in (("start", 3.0), ("end", 170.0)):
+            if key not in self._emotes_done and t > when and cfg.get(key):
+                self._emotes_done.add(key)
+                dev.tap(*B.px(img, *cfg.get("chat", EMOTE_CHAT)))
+                time.sleep(0.5)
+                dev.tap(*B.px(img, *cfg[key]))
 
     def _watch_spells(self, units, img, now):
         """Mesure le temps de vol de nos sorts : du tap jusqu'à ce que le détecteur voie l'effet près de la cible.
@@ -262,6 +287,7 @@ class Agent:
         os.makedirs(folder, exist_ok=True)
         self.det.tracker.reset() if self.det.tracker is not None else None
         log, last_play, gone, t_prev, n, refused = [], 0.0, None, time.time(), 0, 0
+        self._emote_t0, self._emotes_done = time.time(), set()
         last_n, t_new = -1, time.time()
         while True:
             # une image NOUVELLE à chaque tour : sans ça, un flux figé ou coupé faisait tourner la boucle à 100 %
@@ -282,6 +308,7 @@ class Agent:
                 continue
             gone = None
             now = time.time()
+            self._emotes(dev, img, now)
             fps, t_prev = 1 / max(now - t_prev, 1e-3), now
             units, d, info, hand, el = self.think(img, now, fps)
             t_show = time.perf_counter()
