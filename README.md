@@ -1,5 +1,7 @@
 # clash-ai
 
+[![tests](https://github.com/sacha9214/clash-ai/actions/workflows/tests.yml/badge.svg)](https://github.com/sacha9214/clash-ai/actions/workflows/tests.yml)
+
 **An AI that plays Clash Royale on a real Android phone — it sees the screen, reads the battle, decides like a player and learns which strategies win.**
 
 No emulator, no game hacking: the AI watches the phone's video stream over USB (scrcpy), detects every unit with its own YOLO detector, reasons about elixir, trades and tower HP, taps its cards, and after every ladder match a bandit updates which play style wins.
