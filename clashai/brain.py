@@ -65,6 +65,7 @@ WIN_CONDITIONS = {"giant", "hog-rider", "royal-giant", "golem", "pekka", "balloo
 # s'est trompé de camp (match du 25/09 : Géant ennemi vu « à nous » -> « soutien derrière le Géant » fantôme)
 OWN_UNIT_LIFE_S = 40.0
 MUSKETEER_BONUS = 1.5                       # préférence pour la Mousquetaire en défense (voir _stat_pick)
+WITCH_STUCK_S = 15.0                        # Sorcière en main depuis plus longtemps : on la pose au fond
 RANGED_SAFE = 4.5                           # un tireur est posé à >= 4,5 cases de tout ennemi (après 1,5 s d'avance)
 DEFENSE_WAIT_WIN_S = 7.0                    # … et 7 s si le 1er défenseur est donné gagnant
 DEFENSE_WAIT_S = 4.0                        # après une défense : pas de 2e carte sur la même attaque avant 4 s
@@ -239,6 +240,7 @@ class Brain:
         self.own_lane: dict[str, int] = {}      # unité -> couloir de sa dernière pose
         self.last_defense_building = False
         self.last_defense: tuple[float, int, float] | None = None   # (instant, couloir, élixir d'attaque couvert)
+        self._witch_held_since: float | None = None   # depuis quand la Sorcière attend en main
         self.musk_plays = 0                     # poses de notre Mousquetaire : la 3e, 6e… est ÉVOLUÉE (Cycles 2)
         self.own_played: dict[str, float] = {}   # unité -> dernier instant où l'on a posé sa carte
         self.trades: list[tuple[float, float]] = []   # (instant, élixir gagné) de chaque échange vraiment joué
@@ -395,6 +397,10 @@ class Brain:
                now: float) -> Decision | None:
         """Choisit un coup SANS rien retenir : la boucle appelle played() seulement si la carte est vraiment posée
         (sinon, pendant le délai entre deux cartes, chaque décision non jouée créait des troupes virtuelles fantômes)."""
+        if "witch" in hand:
+            self._witch_held_since = self._witch_held_since if self._witch_held_since is not None else now
+        else:
+            self._witch_held_since = None
         seen = self._fix_sides(seen, now)
         seen = seen + self._virtual_units(seen, now)
         self.last_seen = seen                   # ce que le cerveau voit après ses corrections (journal : diagnostic)
@@ -1197,9 +1203,17 @@ class Brain:
             for card in order:
                 # la Sorcière : ses squelettes défendent aussi -> 1 élixir de réserve en moins (30/09 : jamais jouée,
                 # 5 + 3 = 8 élixirs requis alors que le soutien se décide vers 7)
-                if card in playable and elixir - DECK[card].cost >= reserve - (1 if card == "witch" else 0):
+                if card in playable and elixir - DECK[card].cost >= (0 if card == "witch" else reserve):   # ses squelettes défendent
                     x, y = _clamp_own(g.x, g.y + 0.07)       # ~4 cases derrière : hors d'une Boule de feu sur le Géant
                     return Decision(card, playable[card], x, y, f"soutien : {card} derrière le Géant")
+        # Sorcière COINCÉE en main (30/09 : 49 décisions en main, jamais jouée) : au fond, derrière notre tour du
+        # couloir d'attaque, elle lance la prochaine poussée (et ses squelettes défendent en attendant)
+        held = self._witch_held_since
+        if "witch" in playable and held is not None and now - held > WITCH_STUCK_S and elixir >= 6.5                 and not any(s.enemy and s.y > RIVER_Y for s in seen):
+            lane = self._attack_lane(seen, now)
+            x, y = _clamp_own(LANES_X[lane], OWN_TOWER_Y + 0.07)
+            return Decision("witch", playable["witch"], x, y, "Sorcière au fond : elle lance la prochaine poussée",
+                            precise=True)
         d = self._counter_push(seen, playable, elixir, now, support_at, mode, edge)
         if d:
             return d

@@ -797,3 +797,11 @@ def test_no_fireball_on_a_ghost_standing_on_his_tower():
     ghost = Seen("musketeer", True, LANES_X[1], ENEMY_TOWER_Y)
     d = b.decide([ghost], ["fireball", "giant", "knight", "cannon"], [True, False, False, False], 6.0, 100.0)
     assert d is None or d.card != "fireball"
+
+
+def test_stuck_witch_is_played_at_the_back():
+    b = brain()
+    hand = ["witch", "knight", "cannon", "fireball"]
+    assert b.decide([], hand, ALL, 6.8, 100.0) is None or True
+    d = b.decide([], hand, ALL, 6.8, 120.0)
+    assert d is not None and d.card == "witch" and "fond" in d.reason
