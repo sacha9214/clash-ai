@@ -310,6 +310,9 @@ class Brain:
     def _fix_sides(self, seen: list[Seen], now: float) -> list[Seen]:
         """Corrige le camp deviné par le détecteur avec ce que l'IA sait de ses propres coups."""
         self.own_recent = [r for r in self.own_recent if now - r[3] < 6]
+        # HÉROS : même rôle que la carte de base pour toutes nos règles (tank, Canon qui attire, contres…).
+        # 30/09 : son Géant héros, lu « giant-hero », échappait aux règles du Géant.
+        seen = [Seen(s.name[:-5], s.enemy, s.x, s.y, s.vx, s.vy) if s.name.endswith("-hero") else s for s in seen]
         own_units = {u for c in DECK.values() for u in c.units}
         unit_card = {u: c.name for c in DECK.values() for u in c.units}
         # même unité vue DEUX fois (à nous + ennemie) au même endroit : le double « ennemi » est un fantôme

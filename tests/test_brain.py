@@ -711,3 +711,10 @@ def test_our_giant_second_box_four_tiles_below_is_ours():
     b.played(Decision("giant", 0, 0.151, 0.486, "attaque : Géant"), 100.0)
     s = [Seen("giant", True, 0.148, 0.494), Seen("giant", True, 0.146, 0.558)]
     assert all(not x.enemy for x in b._fix_sides(s, 102.0))
+
+
+def test_hero_giant_is_treated_as_a_giant():
+    hand = ["cannon", "knight", "minions", "fireball"]
+    d_hero = brain().decide([enemy("giant-hero", 3, 20, vy_tiles=0.8)], hand, ALL, 8.0, 100.0)
+    d_base = brain().decide([enemy("giant", 3, 20, vy_tiles=0.8)], hand, ALL, 8.0, 100.0)
+    assert d_hero is not None and (d_hero.card, d_hero.reason) == (d_base.card, d_base.reason)
