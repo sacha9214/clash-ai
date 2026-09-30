@@ -832,7 +832,7 @@ class Brain:
                 # gagnants : le moins cher d'abord ; si personne ne gagne : celui qui tient le plus longtemps
                 # la Mousquetaire compte 1 élixir de moins : elle tire de loin, survit souvent et repart en
                 # contre-attaque, et chaque pose charge son évolution (29/09 : 1 Mousquetaire par partie)
-                eff = DECK[card].cost - (MUSKETEER_BONUS if card == "musketeer" else 0)
+                eff = DECK[card].cost - (MUSKETEER_BONUS if card in ("musketeer", "witch") else 0)   # tireurs qui survivent
                 options.append((not win, eff > push_cost + 1, eff if win else 0, -margin,
                                 eff, card, t_kill))
         if not options:
@@ -1112,7 +1112,9 @@ class Brain:
             # pendant notre poussée, on ne doit pas être à sec. Sauf s'il est lui-même à sec ou en fin de match
             reserve = 0 if self.opp_elixir < 3 or mode in ("tout pour l'attaque", "mort subite") else DEFENSE_RESERVE
             for card in order:
-                if card in playable and elixir - DECK[card].cost >= reserve:
+                # la Sorcière : ses squelettes défendent aussi -> 1 élixir de réserve en moins (30/09 : jamais jouée,
+                # 5 + 3 = 8 élixirs requis alors que le soutien se décide vers 7)
+                if card in playable and elixir - DECK[card].cost >= reserve - (1 if card == "witch" else 0):
                     x, y = _clamp_own(g.x, g.y + 0.07)       # ~4 cases derrière : hors d'une Boule de feu sur le Géant
                     return Decision(card, playable[card], x, y, f"soutien : {card} derrière le Géant")
         d = self._counter_push(seen, playable, elixir, now, support_at, mode, edge)
@@ -1121,6 +1123,8 @@ class Brain:
         if elixir >= self._cycle_at(now) and playable:
             # élixir plein et rien à faire : on fait tourner la carte la moins chère, sans risque
             card = min((c for c in playable if DECK[c].kind == "troop"), key=lambda c: DECK[c].cost, default=None)
+            if "witch" in playable:
+                card = "witch"          # élixir plein : c'est LE moment de la Sorcière (5), sinon elle bloque la main
             if card == "archers":
                 # au centre juste devant le Roi : les deux archères partent chacune dans un couloir,
                 # une seule Flèche ne peut plus les prendre ensemble
