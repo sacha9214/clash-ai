@@ -65,6 +65,7 @@ WIN_CONDITIONS = {"giant", "hog-rider", "royal-giant", "golem", "pekka", "balloo
 # s'est trompé de camp (match du 25/09 : Géant ennemi vu « à nous » -> « soutien derrière le Géant » fantôme)
 OWN_UNIT_LIFE_S = 40.0
 MUSKETEER_BONUS = 1.5                       # préférence pour la Mousquetaire en défense (voir _stat_pick)
+BARREL_FIRE_TILES = 6.0                     # Boule de feu sur le Tonneau seulement quand il est à < 6 cases de la tour
 WITCH_STUCK_S = 15.0                        # Sorcière en main depuis plus longtemps : on la pose au fond
 RANGED_SAFE = 4.5                           # un tireur est posé à >= 4,5 cases de tout ennemi (après 1,5 s d'avance)
 DEFENSE_WAIT_WIN_S = 7.0                    # … et 7 s si le 1er défenseur est donné gagnant
@@ -511,6 +512,8 @@ class Brain:
             # Tonneau (3) est un échange un peu perdant mais bien moins cher que la tour (30/09, remarque de Sacha).
             lane_x = LANES_X[_lane(barrel.x)]
             land = (lane_x + (0.05 if lane_x < 0.5 else -0.05), OWN_TOWER_Y - 0.03)   # les gobelins tombent devant la tour
+            if "fireball" in playable and _tile_dist(barrel.x, barrel.y, *land) > BARREL_FIRE_TILES:
+                return None     # trop tôt : notre Boule de feu (~1,5 s) tomberait avant le Tonneau (30/09 : 3 dans le vide)
             if "fireball" in playable:
                 return Decision("fireball", playable["fireball"], *land,
                                 "défense : Tonneau à gobelins -> Boule de feu où ils atterrissent (moins cher que la tour)",

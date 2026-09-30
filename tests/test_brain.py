@@ -779,7 +779,9 @@ def test_waits_for_the_witch_when_almost_affordable():
 def test_goblin_barrel_without_valkyrie_gets_a_fireball_on_the_landing():
     b = brain()
     b.opp_deck = ["goblin-barrel", "knight", "archers", "skeletons", "fireball", "giant", "minions", "zap"]
-    d = b.decide([enemy("goblin-barrel", 3, 16)], ["fireball", "knight", "cannon", "giant"], ALL, 6.0, 100.0)
+    d = b.decide([enemy("goblin-barrel", 3, 14)], ["fireball", "knight", "cannon", "giant"], ALL, 6.0, 100.0)
+    assert d is None                                     # encore loin : la Boule de feu tomberait avant lui
+    d = b.decide([enemy("goblin-barrel", 3, 20)], ["fireball", "knight", "cannon", "giant"], ALL, 6.0, 100.5)
     assert d is not None and d.card == "fireball" and "Tonneau" in d.reason
 
 
