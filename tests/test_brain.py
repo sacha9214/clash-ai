@@ -762,10 +762,10 @@ def test_no_minions_when_his_witch_stands_behind_his_troops():
     assert d is None or d.card != "minions"
 
 
-@pytest.mark.parametrize("foe,n", [("pekka", 1), ("mini-pekka", 1), ("baby-dragon", 1), ("knight", 1), ("bat", 5)])
+@pytest.mark.parametrize("foe,n", [("pekka", 1), ("mini-pekka", 1), ("baby-dragon", 1), ("knight", 1), ("minion", 3)])
 def test_witch_first_when_affordable(foe, n):
     b = brain()
-    d = b.decide([enemy(foe, 3 + i % 2, 21 + i // 2) for i in range(n)], ["witch", "knight", "cannon", "fireball"],
+    d = b.decide([enemy(foe, 3 + i % 2, 21 + i // 2) for i in range(n)], ["witch", "knight", "cannon", "giant"],
                  ALL, 6.0, 100.0)
     assert d is not None and d.card == "witch", (foe, d)
 
