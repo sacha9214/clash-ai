@@ -16,7 +16,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-LIVE = ROOT / "runs/live.jpg"
+LIVE = ROOT / "runs/live.jpg"              # vue annotée de l'IA, écrite pendant les combats
+SCREEN = ROOT / "runs/live_screen.jpg"      # capture brute du téléphone, hors combat (accueil, menus, blocages)
 LOG = Path(os.environ.get("TEMP", ".")) / "pl.log"
 JOURNAL = ROOT / "runs/games/journal.jsonl"
 
@@ -86,7 +87,9 @@ def status() -> dict:
         keep = ("=== ", "adversaire de type", "[scanner]", "autoplay en échec", "inconnu", "Traceback", "combat 1/1")
         lines = [l.strip() for l in text.splitlines() if any(k in l for k in keep)][-12:]
     last = lines[-1] if lines else ""
-    age = round(time.time() - LIVE.stat().st_mtime) if LIVE.exists() else None
+    age = round(time.time() - LIVE.stat().st_mtime) if LIVE.exists() else None      # vue de l'IA (combat)
+    shots = [f.stat().st_mtime for f in (LIVE, SCREEN) if f.exists()]
+    image_age = round(time.time() - max(shots)) if shots else None                  # image affichée
     if "pause revue" in last:
         state = "⏸ pause revue (correction des erreurs du dernier match)"
     elif "échec" in last or "inconnu" in last or "Traceback" in last:
@@ -108,7 +111,7 @@ def status() -> dict:
             if str(j.get("game", "")).startswith(today):
                 r = j.get("result")
                 w, l, o = w + (r == "win"), l + (r == "loss"), o + (r not in ("win", "loss"))
-    return {"state": state, "image_age": age, "wins": w, "losses": l, "other": o, "log": lines, "reviews": reviews()}
+    return {"state": state, "image_age": image_age, "wins": w, "losses": l, "other": o, "log": lines, "reviews": reviews()}
 
 
 def reviews(n: int = 8) -> list[dict]:
@@ -143,8 +146,10 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split("?")[0]
         if path == "/":
             body, ctype = PAGE.encode("utf-8"), "text/html; charset=utf-8"
-        elif path == "/live.jpg" and LIVE.exists():
-            body, ctype = LIVE.read_bytes(), "image/jpeg"
+        elif path == "/live.jpg" and (LIVE.exists() or SCREEN.exists()):
+            # la plus récente des deux : la vue de l'IA en combat, sinon l'écran du téléphone
+            src = max((f for f in (LIVE, SCREEN) if f.exists()), key=lambda f: f.stat().st_mtime)
+            body, ctype = src.read_bytes(), "image/jpeg"
         elif path == "/status":
             body, ctype = json.dumps(status(), ensure_ascii=False).encode("utf-8"), "application/json"
         else:
@@ -172,7 +177,32 @@ def lan_ip() -> str:
         s.close()
 
 
+def screen_loop(every: float = 2.0) -> None:
+    """Hors combat (vue de l'IA vieille de plus de 3 s) : capture de l'écran du téléphone toutes les ~2 s, pour voir
+    l'accueil, la recherche d'adversaire ou un écran qui bloque. Lecture seule (adb screencap)."""
+    import subprocess
+    import cv2
+    import numpy as np
+    sys.path.insert(0, str(ROOT))
+    from clashai.device import ADB
+    while True:
+        try:
+            if not LIVE.exists() or time.time() - LIVE.stat().st_mtime > 3:
+                png = subprocess.run([ADB, "exec-out", "screencap", "-p"], capture_output=True, timeout=10).stdout
+                img = cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_COLOR) if png else None
+                if img is not None:
+                    img = cv2.resize(img, (img.shape[1] // 3, img.shape[0] // 3))
+                    tmp = SCREEN.with_suffix(".tmp.jpg")
+                    cv2.imwrite(str(tmp), img, [cv2.IMWRITE_JPEG_QUALITY, 70])
+                    os.replace(tmp, SCREEN)
+        except Exception:
+            pass
+        time.sleep(every)
+
+
 if __name__ == "__main__":
+    import threading
+    threading.Thread(target=screen_loop, daemon=True).start()
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
     print(f"suivi à distance : http://{lan_ip()}:{port}  (même réseau Wi-Fi)", flush=True)
     ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
