@@ -784,6 +784,11 @@ class Brain:
             t_kill = 1 / (1 / max(t_kill, 1e-6) + 60 / max(sum(f["hp"] for f in hittable), 1))
         their_dps = Brain._their_dps(card, foes)
         t_die = me["hp"] * me["count"] / their_dps if their_dps else 1e9
+        if card == "witch":
+            # ses squelettes (4 par vague) : chacun encaisse un coup à sa place et frappe aussi (30/09 : sans eux la
+            # Sorcière ne « gagnait » jamais et n'était jamais jouée)
+            t_die += 4 * max((f["hs"] for f in hittable), default=1.0)
+            t_kill *= 0.75
         if any(f["buildings_only"] for f in foes):
             # un Géant ne nous frappe pas : il frappe la TOUR. « Gagner », c'est le tuer avant qu'il ne l'abîme
             # (sinon n'importe quelle carte « gagne » et la moins chère passait : Archères 17 s au lieu du Mini P.E.K.K.A 10 s)
