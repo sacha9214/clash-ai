@@ -460,6 +460,7 @@ class Brain:
                 now: float) -> Decision | None:
         playable = {c: i for i, c in enumerate(hand) if c in DECK and ready[i] and DECK[c].cost <= elixir + 0.3}
         enemies = [s for s in seen if s.enemy]
+        self._enemies = enemies                 # tous, pour voir les tireurs en retrait (Sorcière derrière ses troupes)
         # SIÈGE : son Mortier / X-Bow tire sur notre tour DEPUIS SA MOITIÉ -> ce n'est jamais une « menace » au sens des
         # défenses, personne n'y allait (30/09 : Mortier intact toute la partie, Mini P.E.K.K.A jamais joué). On envoie
         # un tueur au sol au pont de ce couloir.
@@ -541,6 +542,12 @@ class Brain:
             vi = next((i for i, c in enumerate(hand) if c == "valkyrie" and ready[i]), None)
             if (len(crowd) >= 3 and vi is not None and "valkyrie" not in playable
                     and elixir >= DECK["valkyrie"].cost - 1.5 and t0.y < OWN_TOWER_Y - 0.06 and not self._tower_low(_lane(t0.x))):
+                return None
+            # la SORCIÈRE en main mais pas encore payable (5) : on l'attend plutôt que de jeter une autre carte, tant que
+            # la menace n'est pas sur la tour (30/09 : « joue avec la Sorcière ! » — les défenses partaient à 2,7 élixirs)
+            if (self._witch_fits(threats) and "witch" in hand and "witch" not in playable
+                    and elixir >= DECK["witch"].cost - 1.5 and t0.y < OWN_TOWER_Y - 0.06 and not self._tower_low(_lane(t0.x))
+                    and "witch" in DECK):
                 return None
             # SURDÉFENSE : une défense vient d'être posée dans ce couloir contre une attaque modeste -> on laisse
             # le défenseur faire son travail avant d'en rajouter (29/09 : Mini P.E.K.K.A + Canon + Chevalier = 11 élixirs
@@ -760,6 +767,35 @@ class Brain:
             return 0.0, 0.0, None
         return best
 
+    def _reachers(self, t: Seen) -> list[dict]:
+        """Stats de TOUS les ennemis qui peuvent frapper près de la cible, même en retrait hors du groupe (sa
+        Sorcière / son Sorcier à 5 cases derrière ses troupes : 30/09, nos Gargouilles détruites par sa Sorcière)."""
+        out = []
+        for e in getattr(self, "_enemies", []):
+            st = card_info.combat(e.name)
+            if _tile_dist(e.x, e.y, t.x, t.y) <= st["range"] + 3.0:
+                out.append(st)
+        return out
+
+    def _swarm_doomed(self, card: str, t: Seen) -> bool:
+        """Nuée fragile (Gargouilles…) qu'un tireur à dégâts de zone à portée tuerait d'un coup."""
+        me = card_info.combat(card)
+        if me["count"] < 3:
+            return False
+        return any(r["splash"] and (r["hits_air"] if me["flying"] else r["hits_ground"]) for r in self._reachers(t))
+
+    @staticmethod
+    def _witch_fits(threats: list[Seen]) -> bool:
+        """La Sorcière est la bonne réponse : unités volantes, nuées, P.E.K.K.A / corps à corps (ses squelettes les
+        occupent). Pas contre ce qui la tue d'un coup de zone à distance (Sorcier, Bourreau, Bombardier…) ni un
+        bâtiment-cible seul (Géant, Cochon : ils l'ignorent, le Canon et le Mini P.E.K.K.A font mieux)."""
+        names = [t.name for t in threats]
+        if any(card_info.combat(n)["splash"] and card_info.combat(n)["range"] >= 4 for n in names):
+            return False
+        if all(card_info.combat(n)["buildings_only"] for n in names):
+            return False
+        return True
+
     def evo_musketeer(self) -> bool:
         """La prochaine Mousquetaire posée est évoluée : 2 poses normales chargent l'évolution, la 3e est évoluée."""
         return self.musk_plays % 3 == 2
@@ -822,6 +858,8 @@ class Brain:
         for card in playable:
             if card not in DECK or DECK[card].kind == "spell" or card == "giant":
                 continue
+            if self._swarm_doomed(card, t):
+                continue                # sa Sorcière / son Sorcier en retrait les souffle d'un coup
             if card == "cannon" and (len(group) >= 3 or card_info.combat(t.name)["count"] >= 3):
                 continue                # le Canon tire sur 1 cible à la fois : inutile contre une nuée (29/09 : Barbares)
             if t.name in AIR_UNITS and not card_info.combat(card)["hits_air"]:
@@ -927,9 +965,16 @@ class Brain:
         push_cost = sum(_cost(n) for n in {s.name for s in threats if math.hypot(s.x - t.x, s.y - t.y) < 0.2})
         group = [s for s in threats if _tile_dist(s.x, s.y, t.x, t.y) < 4]
         near_tower = t.y > OWN_TOWER_Y - 0.1
+        # SORCIÈRE D'ABORD : aérien, nuées, P.E.K.K.A et corps à corps -> elle, à distance sûre, dès qu'elle est payable
+        if "witch" in playable and self._witch_fits(threats):
+            x, y, gap = self._ranged_spot(card_info.combat("witch")["range"], group)
+            if gap is not None:
+                return Decision("witch", playable["witch"], x, y,
+                                f"défense : {t.name} x{len(group)} -> Sorcière à {gap:.1f} cases (squelettes devant, zone + air)",
+                                precise=True, trade=self._trade("witch", group, near_tower, push_cost), push=push_cost)
         # une troupe VOLANTE que la menace ne peut pas toucher, et qui gagne : réponse parfaite, avant le Canon
         # (29/09 : P.E.K.K.A défendu 5 fois au Canon + Chevalier alors que nos Gargouilles le tuent sans perte)
-        if not is_air and not any(card_info.combat(g.name)["hits_air"] for g in group):
+        if not is_air and not any(card_info.combat(g.name)["hits_air"] for g in group)                 and not any(r["hits_air"] for r in self._reachers(t)):      # personne en retrait qui tire en l'air
             immune = {c: i for c, i in playable.items() if c in DECK and DECK[c].kind == "troop"
                       and card_info.combat(c)["flying"] and (self._duel(c, group, near_tower) or (False,))[0]}
             if immune:
@@ -976,7 +1021,7 @@ class Brain:
             return me["count"] >= 3 and any(
                 card_info.combat(g.name)["splash"] and (card_info.combat(g.name)["hits_air"] if me["flying"]
                                                         else card_info.combat(g.name)["hits_ground"]) for g in group)
-        fits = [c for c in fits if not splashed(c)]
+        fits = [c for c in fits if not splashed(c) and not self._swarm_doomed(c, t)]
         cheap = [c for c in fits if DECK[c].cost <= push_cost + 1]
         for card in cheap or sorted(fits, key=lambda c: DECK[c].cost):   # sinon, au moins la moins chère
             c = DECK[card]

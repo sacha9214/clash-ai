@@ -753,3 +753,24 @@ def test_musketeer_never_placed_next_to_enemies(foe):
     d = b.decide([t], ["musketeer", "fireball", "giant", "cannon"], [True, True, False, False], 7.0, 100.0)
     if d is not None and d.card == "musketeer":
         assert _tile_dist(d.x, d.y, t.x, t.y) >= 4.5, (foe, d.reason)
+
+
+def test_no_minions_when_his_witch_stands_behind_his_troops():
+    b = brain()
+    seen = [enemy("knight", 3, 21), enemy("witch", 3, 16)]      # sa Sorcière 5 cases derrière
+    d = b.decide(seen, ["minions", "knight", "cannon", "fireball"], ALL, 6.0, 100.0)
+    assert d is None or d.card != "minions"
+
+
+@pytest.mark.parametrize("foe,n", [("pekka", 1), ("mini-pekka", 1), ("baby-dragon", 1), ("knight", 1), ("bat", 5)])
+def test_witch_first_when_affordable(foe, n):
+    b = brain()
+    d = b.decide([enemy(foe, 3 + i % 2, 21 + i // 2) for i in range(n)], ["witch", "knight", "cannon", "fireball"],
+                 ALL, 6.0, 100.0)
+    assert d is not None and d.card == "witch", (foe, d)
+
+
+def test_waits_for_the_witch_when_almost_affordable():
+    b = brain()
+    d = b.decide([enemy("mini-pekka", 3, 19)], ["witch", "knight", "cannon", "fireball"], ALL, 4.0, 100.0)
+    assert d is None
