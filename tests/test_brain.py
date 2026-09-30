@@ -814,3 +814,12 @@ def test_tower_handles_five_skeletons_when_healthy():
     d = b.decide([enemy("skeleton", 3 + i % 3, 24 + i // 3) for i in range(5)],
                  ["minions", "knight", "mini-pekka", "cannon"], ALL, 6.0, 100.0)
     assert d is None or not d.reason.startswith("défense")
+
+
+def test_our_giant_misnamed_pekka_next_to_it_is_dropped():
+    from clashai.brain import Seen
+    b = brain()
+    b.opp_deck = ["archers", "fireball", "goblin-hut", "goblins", "knight", "musketeer", "rascals", "tombstone"]
+    s = [Seen("giant", False, 0.225, 0.472), Seen("pekka", True, 0.312, 0.498)]
+    out = b._fix_sides(s, 100.0)
+    assert not any(x.enemy for x in out)

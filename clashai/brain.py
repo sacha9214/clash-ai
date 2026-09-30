@@ -65,6 +65,10 @@ WIN_CONDITIONS = {"giant", "hog-rider", "royal-giant", "golem", "pekka", "balloo
 # s'est trompé de camp (match du 25/09 : Géant ennemi vu « à nous » -> « soutien derrière le Géant » fantôme)
 OWN_UNIT_LIFE_S = 40.0
 MUSKETEER_BONUS = 1.5                       # préférence pour la Mousquetaire en défense (voir _stat_pick)
+UNIT_CARD_ANY = {"pekka": "pekka", "golem": "golem", "giant": "giant", "mega-knight": "mega-knight",
+                 "royal-giant": "royal-giant", "electro-giant": "electro-giant", "goblin-giant": "goblin-giant",
+                 "giant-skeleton": "giant-skeleton", "ice-golem": "ice-golem", "lava-hound": "lava-hound",
+                 "elixir-golem-big": "elixir-golem"}
 BARREL_FIRE_TILES = 6.0                     # Boule de feu sur le Tonneau seulement quand il est à < 6 cases de la tour
 WITCH_STUCK_S = 15.0                        # Sorcière en main depuis plus longtemps : on la pose au fond
 RANGED_SAFE = 4.5                           # un tireur est posé à >= 4,5 cases de tout ennemi (après 1,5 s d'avance)
@@ -328,6 +332,13 @@ class Brain:
         seen = [Seen(s.name[:-5], s.enemy, s.x, s.y, s.vx, s.vy) if s.name.endswith("-hero") else s for s in seen]
         own_units = {u for c in DECK.values() for u in c.units}
         unit_card = {u: c.name for c in DECK.values() for u in c.units}
+        # notre GRANDE unité vue en double sous un AUTRE nom : une grosse « ennemie » (P.E.K.K.A, Golem…) collée à notre
+        # Géant, d'une carte qu'il n'a jamais jouée -> copie mal nommée du nôtre (30/09 : 5 Canons contre un
+        # « P.E.K.K.A » à 1-3 cases de notre Géant)
+        big_ours = [s for s in seen if not s.enemy and s.name in TALL_UNITS]
+        seen = [s for s in seen if not (s.enemy and s.name in TALL_UNITS | {"pekka"}
+                                        and (UNIT_CARD_ANY.get(s.name) or s.name) not in self.opp_deck
+                                        and any(_tile_dist(s.x, s.y, o.x, o.y) < 3.0 for o in big_ours))]
         # même unité vue DEUX fois (à nous + ennemie) au même endroit : le double « ennemi » est un fantôme
         # (27/09 : notre Géant doublé d'un Géant ennemi -> Canon et Gargouilles contre notre propre Géant)
         # confusions fréquentes du scanner : un nom absent de son deck connu, dont le « voisin » y est -> le voisin
