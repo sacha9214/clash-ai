@@ -20,6 +20,10 @@ from clashai.tiles import OWN_FIRST_ROW, PHONE
 
 # Géométrie de l'arène (mesurée sur l'écran du REDMAGIC, flux 578x1280)
 RIVER_Y = 0.425
+# grandes unités : le scanner les coupe souvent en 2 boîtes à 3-4 cases l'une de l'autre (30/09 : 2e boîte de notre
+# Géant à 4,1 cases du point de pose -> restée « ennemie » -> Gargouilles sur notre propre Géant)
+TALL_UNITS = {"giant", "golem", "pekka", "mega-knight", "giant-skeleton", "electro-giant", "goblin-giant", "royal-giant",
+              "ice-golem", "elixir-golem-big", "lava-hound"}
 SIEGE_WAIT_S = 8.0                           # entre deux troupes envoyées sur son Mortier / X-Bow
 SIEGE_UNITS = {"mortar", "x-bow", "mortar-evolution", "x-bow-evolution"}
 LANES_X = (0.205, 0.795)
@@ -326,7 +330,7 @@ class Brain:
         out = []
         for s in seen:
             base = s.name.replace("-evolution", "")
-            if s.enemy and s.y > RIVER_Y and any(s.name in names and _tile_dist(s.x, s.y, x, y) < 4
+            if s.enemy and s.y > RIVER_Y and any(s.name in names and _tile_dist(s.x, s.y, x, y) < (5 if s.name in TALL_UNITS else 4)
                                                  for names, x, y, _ in self.own_recent):
                 # NOTRE unité fraîchement posée prise pour une ennemie (ex. notre Géant « ennemi » sur sa case de pose)
                 s = Seen(s.name, False, s.x, s.y, s.vx, s.vy)

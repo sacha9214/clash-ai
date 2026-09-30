@@ -703,3 +703,11 @@ def test_mortar_on_his_side_gets_a_ground_killer_at_the_bridge():
     assert d is not None and d.card == "mini-pekka" and "siège" in d.reason
     from clashai.brain import RIVER_Y
     assert d.y > RIVER_Y and d.x < 0.5                   # notre côté du pont, couloir du Mortier
+
+
+def test_our_giant_second_box_four_tiles_below_is_ours():
+    from clashai.brain import Seen
+    b = brain()
+    b.played(Decision("giant", 0, 0.151, 0.486, "attaque : Géant"), 100.0)
+    s = [Seen("giant", True, 0.148, 0.494), Seen("giant", True, 0.146, 0.558)]
+    assert all(not x.enemy for x in b._fix_sides(s, 102.0))
