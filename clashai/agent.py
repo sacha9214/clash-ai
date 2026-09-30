@@ -145,9 +145,13 @@ class Agent:
         for key, when in (("start", 3.0), ("end", 170.0)):
             if key not in self._emotes_done and t > when and cfg.get(key):
                 self._emotes_done.add(key)
-                dev.tap(*B.px(img, *cfg.get("chat", EMOTE_CHAT)))
-                time.sleep(0.5)
-                dev.tap(*B.px(img, *cfg[key]))
+                chat, pos = B.px(img, *cfg.get("chat", EMOTE_CHAT)), B.px(img, *cfg[key])
+
+                def send(chat=chat, pos=pos):
+                    dev.tap(*chat)
+                    time.sleep(0.5)                      # dans un fil à part : l'IA continue de jouer (30/09 : pic à 578 ms)
+                    dev.tap(*pos)
+                threading.Thread(target=send, daemon=True).start()
 
     def _watch_spells(self, units, img, now):
         """Mesure le temps de vol de nos sorts : du tap jusqu'à ce que le détecteur voie l'effet près de la cible.
