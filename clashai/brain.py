@@ -65,6 +65,7 @@ WIN_CONDITIONS = {"giant", "hog-rider", "royal-giant", "golem", "pekka", "balloo
 # s'est trompé de camp (match du 25/09 : Géant ennemi vu « à nous » -> « soutien derrière le Géant » fantôme)
 OWN_UNIT_LIFE_S = 40.0
 MUSKETEER_BONUS = 1.5                       # préférence pour la Mousquetaire en défense (voir _stat_pick)
+RANGED_SAFE = 4.5                           # un tireur est posé à >= 4,5 cases de tout ennemi (après 1,5 s d'avance)
 DEFENSE_WAIT_WIN_S = 7.0                    # … et 7 s si le 1er défenseur est donné gagnant
 DEFENSE_WAIT_S = 4.0                        # après une défense : pas de 2e carte sur la même attaque avant 4 s
 DEFENSE_RESERVE = 3                         # élixir toujours gardé pour défendre (Chevalier / Canon)
@@ -738,6 +739,27 @@ class Brain:
             return 1.35 + 0.047 * _tile_dist(x, y, 0.5, KING_Y)
         return SPELL_IMPACT_S.get(card, 2.0)
 
+    def _ranged_spot(self, rng: float, group: list[Seen]) -> tuple[float, float, float | None]:
+        """Meilleure case de notre moitié pour un tireur : chaque ennemi est pris là où il sera dans 1,5 s (apparition
+        + premier tir). Case valable si l'ennemi le plus proche est à >= RANGED_SAFE cases (et hors de sa portée + 1),
+        et une cible à portée. Parmi elles : la plus proche de notre tour (elle la protège), puis la plus sûre."""
+        future = [(self._future(g, 1.5), card_info.combat(g.name)["range"]) for g in group]
+        best, best_key = None, None
+        for row in range(OWN_FIRST_ROW, 31):
+            for col in range(0, 18):
+                x, y = _clamp_own(*PHONE.center(col, row))
+                ds = [(_tile_dist(x, y, fx, fy), r) for (fx, fy), r in future]
+                near = min(d for d, _ in ds)
+                if near < RANGED_SAFE or any(d < r + 1.0 for d, r in ds) or near > rng:
+                    continue
+                tower = min(_tile_dist(x, y, tx, ty) for tx, ty in OWN_TOWER_CENTERS)
+                key = (round(tower), -near)
+                if best_key is None or key < best_key:
+                    best, best_key = (x, y, near), key
+        if best is None:
+            return 0.0, 0.0, None
+        return best
+
     def evo_musketeer(self) -> bool:
         """La prochaine Mousquetaire posée est évoluée : 2 poses normales chargent l'évolution, la 3e est évoluée."""
         return self.musk_plays % 3 == 2
@@ -841,12 +863,19 @@ class Brain:
                             precise=True, trade=self._trade(card, group, near_tower, push_cost), push=push_cost)
         me = card_info.combat(card)
         their_range = max(card_info.combat(g.name)["range"] for g in group)
-        if me["range"] >= 4 and their_range < me["range"] - 1:
-            # tireur : posé hors de leur portée mais dans la nôtre, en arrière de la menace (vers notre Roi)
-            gap = min(me["range"] - 0.8, their_range + 2.5)
-            x, y = t.x, t.y + gap * PHONE.th
-            where = f"à {gap:.1f} cases (sa portée {their_range:.1f}, la nôtre {me['range']:.1f})"
-        elif lose:
+        if me["range"] >= 4:
+            # TIREUR (Mousquetaire, Sorcière) : jamais au contact. Case la plus sûre de notre moitié : à sa portée,
+            # hors de portée de TOUS les ennemis (avance pendant l'apparition comprise), près de notre tour.
+            # 30/09 : la moitié des Mousquetaires posées à moins de 4 cases de l'ennemi -> mortes avant de tirer.
+            x, y, gap = self._ranged_spot(me["range"], group)
+            if gap is None:
+                return None                              # aucune case sûre : on ne la jette pas dans la mêlée
+            where = f"à {gap:.1f} cases de l'ennemi le plus proche (portée {me['range']:.1f})"
+            verdict = f"gagne en ~{t_kill:.0f} s" if not lose else "ralentit seulement"
+            return Decision(card, playable[card], x, y,
+                            f"défense : {t.name} x{len(group)} -> {card} [stats : {verdict}, {where}]", precise=True,
+                            trade=self._trade(card, group, near_tower, push_cost), push=push_cost)
+        if lose:
             # combat difficile : devant notre tour, pour que tour et unité frappent ensemble
             lane_x = LANES_X[_lane(t.x)]
             x, y = lane_x + (0.06 if lane_x < 0.5 else -0.06), OWN_TOWER_Y - 0.05
@@ -951,7 +980,14 @@ class Brain:
                 x, y = _clamp_own(0.5 + (-0.04 if lane_x < 0.5 else 0.04), OWN_TOWER_Y - 0.03)
                 return Decision(card, playable[card], x, y, f"défense : {t.name} -> {card} au centre (les 2 tours tirent)",
                                 precise=True, trade=self._trade(card, group, True, push_cost), push=push_cost)
-            if c.targets == "air+ground" and not c.flying:
+            ranged = c.targets == "air+ground" and not c.flying and card_info.combat(card)["range"] >= 4
+            if ranged:
+                # tireur : même règle que la défense par les stats (case sûre, jamais au contact), et le modèle des
+                # pros ne la déplace pas (30/09 : Mousquetaire posée à 1,3 case d'un ennemi par le modèle)
+                x, y, gap = self._ranged_spot(card_info.combat(card)["range"], group)
+                if gap is None:
+                    x, y = lane_x + (0.14 if lane_x < 0.5 else -0.14), OWN_TOWER_Y + 0.085   # derrière la tour
+            elif c.targets == "air+ground" and not c.flying:
                 # tireur : derrière la tour, décalé vers le centre -> la tour et lui tirent ensemble
                 x, y = lane_x + (0.14 if lane_x < 0.5 else -0.14), OWN_TOWER_Y + 0.05
                 if set(self.opp_hand) & BIG_SPELLS:
@@ -965,7 +1001,7 @@ class Brain:
                 x, y = t.x + t.vx * 0.5, t.y + 0.05
             x, y = _clamp_own(x, y)
             kind = "volante" if is_air else "tank" if is_tank else "au sol"
-            return Decision(card, playable[card], x, y, f"défense : {t.name} ({kind}) -> {card}",
+            return Decision(card, playable[card], x, y, f"défense : {t.name} ({kind}) -> {card}", precise=ranged,
                             trade=self._trade(card, group, near_tower, push_cost), push=push_cost)
         return None
 

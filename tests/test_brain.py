@@ -743,3 +743,13 @@ def valk_deck(monkeypatch):
     """Valkyrie (deck jusqu'au 30/09, sur le banc depuis la Sorcière) : ses règles restent testées."""
     from clashai.cards import BENCH, DECK
     monkeypatch.setitem(DECK, "valkyrie", BENCH["valkyrie"])
+
+
+@pytest.mark.parametrize("foe", ["knight", "mini-pekka", "hog-rider", "musketeer", "wizard", "mega-minion", "baby-dragon"])
+def test_musketeer_never_placed_next_to_enemies(foe):
+    from clashai.brain import _tile_dist
+    b = brain()
+    t = enemy(foe, 4, 21, vy_tiles=1.0)
+    d = b.decide([t], ["musketeer", "fireball", "giant", "cannon"], [True, True, False, False], 7.0, 100.0)
+    if d is not None and d.card == "musketeer":
+        assert _tile_dist(d.x, d.y, t.x, t.y) >= 4.5, (foe, d.reason)
