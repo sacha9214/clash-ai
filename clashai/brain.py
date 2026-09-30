@@ -486,6 +486,20 @@ class Brain:
             return Decision("valkyrie", playable["valkyrie"], x, y, "défense : Tonneau à gobelins -> Valkyrie derrière la tour",
                             precise=True, trade=self._trade("valkyrie", gobs, True, _cost("goblin-barrel")),
                             push=_cost("goblin-barrel"))
+        if barrel and not self._tower_ok_vs_barrel(barrel):
+            # sans Valkyrie : 3 gobelins sur la tour = des centaines de PV perdus. Une Boule de feu (4) contre le
+            # Tonneau (3) est un échange un peu perdant mais bien moins cher que la tour (30/09, remarque de Sacha).
+            lane_x = LANES_X[_lane(barrel.x)]
+            land = (lane_x + (0.05 if lane_x < 0.5 else -0.05), OWN_TOWER_Y - 0.03)   # les gobelins tombent devant la tour
+            if "fireball" in playable:
+                return Decision("fireball", playable["fireball"], *land,
+                                "défense : Tonneau à gobelins -> Boule de feu où ils atterrissent (moins cher que la tour)",
+                                precise=True, trade=_cost("goblin-barrel") - DECK["fireball"].cost, push=_cost("goblin-barrel"))
+            for card in ("witch", "knight"):
+                if card in playable:
+                    x, y = _clamp_own(lane_x, OWN_TOWER_Y + 0.05)
+                    return Decision(card, playable[card], x, y, f"défense : Tonneau à gobelins -> {card} derrière la tour",
+                                    precise=True, push=_cost("goblin-barrel"))
         enemies = [e for e in enemies if e.name != "goblin-barrel"]
         threats = [s for s in enemies if s.y > RIVER_Y - self.p['defend_line']   # sur notre moitié ou au pont
                    and s.name not in SPAWNERS       # ses bâtiments ne viennent pas : ce qui en sort sera défendu
@@ -766,6 +780,10 @@ class Brain:
         if best is None:
             return 0.0, 0.0, None
         return best
+
+    def _tower_ok_vs_barrel(self, barrel: Seen) -> bool:
+        """Le Tonneau vise une tour déjà tombée (rien à protéger) : pas de réponse."""
+        return self.match is not None and self.match.our_hp[_lane(barrel.x)] <= 0.0
 
     def _reachers(self, t: Seen) -> list[dict]:
         """Stats de TOUS les ennemis qui peuvent frapper près de la cible, même en retrait hors du groupe (sa
