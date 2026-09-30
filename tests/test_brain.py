@@ -789,3 +789,11 @@ def test_ghost_of_our_fresh_giant_on_our_tower_early_game():
     b.played(Decision("giant", 0, 0.151, 0.486, "attaque : Géant"), 100.0)
     s = [Seen("giant", True, 0.147, 0.495), Seen("giant", True, 0.138, 0.578)]
     assert all(not x.enemy for x in b._fix_sides(s, 102.0))
+
+
+def test_no_fireball_on_a_ghost_standing_on_his_tower():
+    from clashai.brain import LANES_X, ENEMY_TOWER_Y
+    b = brain(fireball_min=1)
+    ghost = Seen("musketeer", True, LANES_X[1], ENEMY_TOWER_Y)
+    d = b.decide([ghost], ["fireball", "giant", "knight", "cannon"], [True, False, False, False], 6.0, 100.0)
+    assert d is None or d.card != "fireball"

@@ -110,6 +110,15 @@ def _tile_dist(ax: float, ay: float, bx: float, by: float) -> float:
     return math.hypot((ax - bx) / PHONE.tw, (ay - by) / PHONE.th)
 
 
+def _on_enemy_tower(x: float, y: float) -> bool:
+    """Position sur une tour ennemie (princesse : 1,8 case autour du centre ; Roi : son emplacement)."""
+    if any(_tile_dist(x, y, lx, ENEMY_TOWER_Y) < 1.8 for lx in LANES_X):
+        return True
+    c, r = PHONE.to_tile(x, y)
+    c0, c1, r0, r1 = ENEMY_KING_TILES
+    return c0 <= c <= c1 and r0 <= r <= r1
+
+
 def _hits_enemy_king(card: str, x: float, y: float) -> bool:
     tx, ty = PHONE.to_tile(x, y)
     x0, x1, y0, y1 = ENEMY_KING_TILES
@@ -709,8 +718,14 @@ class Brain:
             if card not in playable or not enemies:
                 continue
             r = card_info.spell_radius(card)                  # rayon réel, en cases
-            t = self._impact_time(card, 0, 0)
-            fut = [self._future(e, t) for e in enemies]        # où sera chaque unité quand le sort tombera
+            # pas de « troupe » posée SUR une de ses tours : le défenseur de la tour est souvent lu Mousquetaire /
+            # Archère (30/09 : 3 Boules de feu sur des tours vides, dont une qui a réveillé son Roi)
+            enemies = [e for e in enemies if not _on_enemy_tower(e.x, e.y)]
+            if not enemies:
+                continue
+            # temps de vol PAR CIBLE (il dépend de la distance) : l'ancien calcul prenait la position (0, 0) -> ~3,2 s
+            # au lieu de 1,5-2,5 s, et visait là où les troupes seraient bien trop tard
+            fut = [self._future(e, self._impact_time(card, e.x, e.y)) for e in enemies]
             best = None                                        # (valeur, nombre touché, centre)
             for sx, sy in fut:
                 group = [p for p in fut if _tile_dist(*p, sx, sy) < r]
