@@ -34,7 +34,7 @@ PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
  h1 { font-size:18px; margin:0 0 8px; } .mut { color:var(--mut); font-size:13px; }
  .w { color:var(--ok); } .l { color:var(--bad); } pre { white-space:pre-wrap; margin:0; font-size:13px; }
 </style></head><body><main>
-<img id="live" alt="écran de l'IA">
+<img id="live" src="/stream" alt="écran de l'IA">
 <div class="side">
  <div class="card"><h1>État</h1><div id="state">…</div><div class="mut" id="age"></div></div>
  <div class="card"><h1>Aujourd'hui</h1><div id="score">…</div></div>
@@ -56,7 +56,7 @@ function refreshImage(s) {
 async function tick() {
   try {
     const s = await (await fetch('/status')).json();
-    refreshImage(s);
+    // image : flux continu /stream (plus besoin de la recharger)
     document.getElementById('state').textContent = s.state;
     document.getElementById('age').textContent = s.image_age == null ? 'pas encore d\\'image'
         : 'image d\\'il y a ' + s.image_age + ' s';
@@ -150,6 +150,9 @@ class Handler(BaseHTTPRequestHandler):
             # la plus récente des deux : la vue de l'IA en combat, sinon l'écran du téléphone
             src = max((f for f in (LIVE, SCREEN) if f.exists()), key=lambda f: f.stat().st_mtime)
             body, ctype = src.read_bytes(), "image/jpeg"
+        elif path == "/stream":
+            self.stream()
+            return
         elif path == "/status":
             body, ctype = json.dumps(status(), ensure_ascii=False).encode("utf-8"), "application/json"
         else:
@@ -161,6 +164,30 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def stream(self):
+        """Flux MJPEG : chaque nouvelle image (vue de l'IA ~8/s en combat, écran du téléphone ~1/s sinon) est poussée
+        au navigateur dès qu'elle existe."""
+        self.send_response(200)
+        self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        last = 0.0
+        try:
+            while True:
+                files = [f for f in (LIVE, SCREEN) if f.exists()]
+                if files:
+                    src = max(files, key=lambda f: f.stat().st_mtime)
+                    m = src.stat().st_mtime
+                    if m != last:
+                        last = m
+                        data = src.read_bytes()
+                        head = b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: " + str(len(data)).encode()
+                        self.wfile.write(head + b"\r\n\r\n" + data + b"\r\n")
+                        self.wfile.flush()
+                time.sleep(0.06)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
+            return
 
     def log_message(self, *args):
         pass
@@ -177,7 +204,7 @@ def lan_ip() -> str:
         s.close()
 
 
-def screen_loop(every: float = 2.0) -> None:
+def screen_loop(every: float = 0.6) -> None:
     """Hors combat (vue de l'IA vieille de plus de 3 s) : capture de l'écran du téléphone toutes les ~2 s, pour voir
     l'accueil, la recherche d'adversaire ou un écran qui bloque. Lecture seule (adb screencap)."""
     import subprocess

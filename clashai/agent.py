@@ -51,7 +51,8 @@ class StreamLost(RuntimeError):
 
 
 LIVE_DIR = Path(__file__).resolve().parents[1] / "runs"
-EMOTE_CHAT = (0.097, 0.89)     # bulle de discussion, en bas à gauche pendant un combat   # runs/live.jpg : suivi à distance
+EMOTE_CHAT = (0.097, 0.89)
+LIVE_EVERY_S = 0.12            # ~8 images/s pour la page de suivi (fil d'affichage, pas celui des décisions)     # bulle de discussion, en bas à gauche pendant un combat   # runs/live.jpg : suivi à distance
 
 class Agent:
     ctx: str | None = None                       # type du deck adverse de la partie en cours
@@ -112,12 +113,11 @@ class Agent:
                 time.sleep(0.01)
                 continue
             view = self.annotate(*job)
-            if time.time() - getattr(self, "_live_t", 0) > 1.0:
+            if time.time() - getattr(self, "_live_t", 0) > LIVE_EVERY_S:
                 # image « en direct » pour la page de suivi à distance (scripts/live_server.py)
                 self._live_t = time.time()
                 live = LIVE_DIR / "live.jpg"
-                cv2.imwrite(str(live.with_suffix(".tmp.jpg")), cv2.resize(view, (view.shape[1] // 2, view.shape[0] // 2)),
-                            [cv2.IMWRITE_JPEG_QUALITY, 70])
+                cv2.imwrite(str(live.with_suffix(".tmp.jpg")), view, [cv2.IMWRITE_JPEG_QUALITY, 80])   # pleine résolution
                 try:
                     os.replace(live.with_suffix(".tmp.jpg"), live)
                 except OSError:
