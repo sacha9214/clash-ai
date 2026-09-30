@@ -563,7 +563,10 @@ class Brain:
             # faux -> on défend
             if all(s["hp"] and s["dps"] for s in st) and dps * hp / 60 < 170:
                 threats = []
-        if threats and not any(self._tower_low(_lane(t.x)) for t in threats) and len(threats) <= 4 and all(
+        # jusqu'à 8 unités « un tir » si la tour a plus de la moitié de sa vie (30/09 : 4 cartes à 3-4 élixirs posées
+        # contre ses 5 Squelettes à 1 élixir), 4 sinon
+        healthy = self.match is None or all(self.match.our_hp[_lane(t.x)] > 0.5 for t in threats)
+        if threats and not any(self._tower_low(_lane(t.x)) for t in threats) and len(threats) <= (8 if healthy else 4) and all(
                 t.name in SPIRITS or 0 < card_info.combat(t.name)["hp"] <= ONE_SHOT_HP for t in threats):
             # 2-4 Squelettes / esprits : la tour les tue en 1 coup (les esprits meurent en frappant) (27/09 : 5 cartes
             # gâchées). Pas les Gargouilles ni les Gobelins (79-90 PV : plusieurs coups, 3 Gargouilles = 138 dégâts/s)

@@ -805,3 +805,10 @@ def test_stuck_witch_is_played_at_the_back():
     assert b.decide([], hand, ALL, 6.8, 100.0) is None or True
     d = b.decide([], hand, ALL, 6.8, 120.0)
     assert d is not None and d.card == "witch" and "fond" in d.reason
+
+
+def test_tower_handles_five_skeletons_when_healthy():
+    b = brain()
+    d = b.decide([enemy("skeleton", 3 + i % 3, 24 + i // 3) for i in range(5)],
+                 ["minions", "knight", "mini-pekka", "cannon"], ALL, 6.0, 100.0)
+    assert d is None or not d.reason.startswith("défense")
