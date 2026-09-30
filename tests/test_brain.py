@@ -695,3 +695,11 @@ def test_second_defense_allowed_when_our_troop_defender_already_died():
     b.virtual = []                                        # notre Chevalier est mort (plus vu, plus suivi)
     d = b.decide([t], ["cannon", "mini-pekka", "minions", "fireball"], ALL, 6.0, 101.5)
     assert d is not None and d.reason.startswith("défense")
+
+
+def test_mortar_on_his_side_gets_a_ground_killer_at_the_bridge():
+    b = brain()
+    d = b.decide([enemy("mortar", 3, 12)], ["mini-pekka", "knight", "cannon", "fireball"], ALL, 6.0, 100.0)
+    assert d is not None and d.card == "mini-pekka" and "siège" in d.reason
+    from clashai.brain import RIVER_Y
+    assert d.y > RIVER_Y and d.x < 0.5                   # notre côté du pont, couloir du Mortier

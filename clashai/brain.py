@@ -20,6 +20,8 @@ from clashai.tiles import OWN_FIRST_ROW, PHONE
 
 # Géométrie de l'arène (mesurée sur l'écran du REDMAGIC, flux 578x1280)
 RIVER_Y = 0.425
+SIEGE_WAIT_S = 8.0                           # entre deux troupes envoyées sur son Mortier / X-Bow
+SIEGE_UNITS = {"mortar", "x-bow", "mortar-evolution", "x-bow-evolution"}
 LANES_X = (0.205, 0.795)
 OWN_ZONE = (0.04, 0.96, 0.46, 0.695)       # où l'on peut poser une troupe (la clôture du fond est à 0.705)
 OWN_TOWER_Y, KING_Y = 0.59, 0.66
@@ -450,6 +452,18 @@ class Brain:
                 now: float) -> Decision | None:
         playable = {c: i for i, c in enumerate(hand) if c in DECK and ready[i] and DECK[c].cost <= elixir + 0.3}
         enemies = [s for s in seen if s.enemy]
+        # SIÈGE : son Mortier / X-Bow tire sur notre tour DEPUIS SA MOITIÉ -> ce n'est jamais une « menace » au sens des
+        # défenses, personne n'y allait (30/09 : Mortier intact toute la partie, Mini P.E.K.K.A jamais joué). On envoie
+        # un tueur au sol au pont de ce couloir.
+        siege = [e for e in enemies if e.name in SIEGE_UNITS and e.y < RIVER_Y]
+        if siege and now - getattr(self, "last_siege", -1e9) > SIEGE_WAIT_S:   # le 1er tueur a le temps d'arriver
+            m = max(siege, key=lambda e: e.y)
+            for card in ("mini-pekka", "knight", "valkyrie", "giant"):
+                if card in playable:
+                    self.last_siege = now
+                    x, y = _clamp_own(LANES_X[_lane(m.x)], RIVER_Y + 0.03)
+                    return Decision(card, playable[card], x, y, f"siège : {m.name} -> {card} au pont pour le détruire",
+                                    precise=True)
         # Tonneau à gobelins en vol : Valkyrie juste derrière la tour visée, elle balaie les 3 gobelins à l'atterrissage
         barrel = next((e for e in enemies if e.name == "goblin-barrel"), None)
         if barrel and len(self.opp_deck) >= 8 and "goblin-barrel" not in self.opp_deck:
