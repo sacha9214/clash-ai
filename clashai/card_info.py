@@ -117,6 +117,7 @@ STAT_FIX = {  # PV / dégâts au niveau 1 d'une commune (même échelle que le r
     "rascal-girl": {"hp": 85.0, "dmg": 42.0, "hs": 1.0, "count": 2, "hits_air": True, "range": 5.0},
     "goblin-brawler": {"hp": 300.0, "dmg": 70.0, "hs": 1.1},
     "princess": {"dmg": 55.0, "range": 9.0},
+    "witch": {"range": 5.5},                # la base donnait 0,5 case (portée de ses squelettes ?)
 }
 
 

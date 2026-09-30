@@ -882,11 +882,11 @@ class Brain:
                                 f"défense : {t.name} (volant, rien pour tirer en l'air) -> {decoy} en appât décalé",
                                 precise=True, push=push_cost)
         if is_air:
-            order = ["musketeer", "archers", "minions", "spear-goblins"]
+            order = ["witch", "musketeer", "archers", "minions", "spear-goblins"]   # la Sorcière : air + zone
         elif is_tank:
-            order = ["mini-pekka", "musketeer", "knight", "valkyrie", "minions", "archers"]
+            order = ["mini-pekka", "witch", "musketeer", "knight", "valkyrie", "minions", "archers"]   # squelettes = appâts
         elif swarm >= 2:
-            order = ["valkyrie", "knight", "musketeer", "archers", "mini-pekka"]   # dégâts de zone
+            order = ["valkyrie", "witch", "knight", "musketeer", "archers", "mini-pekka"]   # dégâts de zone
         else:
             order = ["knight", "valkyrie", "mini-pekka", "musketeer", "archers", "minions"]
         # échange d'élixir : parmi les cartes adaptées, ne pas payer plus que l'attaque (+1) si une moins chère suffit
@@ -1063,7 +1063,7 @@ class Brain:
             support_at = min(support_at, 3)
         if ours and elixir >= support_at and mode != "défendre l'avance":
             g = ours[0]
-            order = ["musketeer", "archers", "valkyrie", "mini-pekka", "minions"]
+            order = ["witch", "musketeer", "archers", "valkyrie", "mini-pekka", "minions"]   # Sorcière derrière le Géant
             if set(self.opp_hand) & (SMALL_SPELLS | BIG_SPELLS):   # Boule de feu / Poison tuent aussi les archères
                 # ses Flèches/Zap/Bûche tueraient archères ou gargouilles : on les passe en dernier
                 order = [c for c in order if c not in ("archers", "minions")] + ["archers", "minions"]

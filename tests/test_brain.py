@@ -718,3 +718,21 @@ def test_hero_giant_is_treated_as_a_giant():
     d_hero = brain().decide([enemy("giant-hero", 3, 20, vy_tiles=0.8)], hand, ALL, 8.0, 100.0)
     d_base = brain().decide([enemy("giant", 3, 20, vy_tiles=0.8)], hand, ALL, 8.0, 100.0)
     assert d_hero is not None and (d_hero.card, d_hero.reason) == (d_base.card, d_base.reason)
+
+
+@pytest.fixture
+def witch_deck(monkeypatch):
+    """Deck prévu à 1750 trophées : la Sorcière à la place de la Valkyrie."""
+    from clashai.cards import BENCH, DECK
+    monkeypatch.delitem(DECK, "valkyrie")
+    monkeypatch.setitem(DECK, "witch", BENCH["witch"])
+
+
+def test_witch_defends_against_air_and_supports_the_giant(witch_deck):
+    b = brain()
+    d = b.decide([enemy("baby-dragon", 3, 21)], ["witch", "knight", "cannon", "fireball"], ALL, 8.0, 100.0)
+    assert d is not None and d.card == "witch"
+    b = brain(support_min_elixir=3)
+    b.played(Decision("giant", 0, *at(3, 26), "attaque : Géant"), 90.0)
+    d = b.decide([ours("giant", 3, 20, vy_tiles=-0.8)], ["witch", "knight", "cannon", "fireball"], ALL, 9.0, 100.0)
+    assert d is not None and d.card == "witch" and d.reason.startswith("soutien")

@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA = Path("D:/clash-ai-dataset")
 sys.path.insert(0, str(ROOT))
 # unités produites par nos cartes (nombre, écart horizontal en fraction d'arène entre elles)
-OUR_UNITS = {"archers": ("archer", 2, 0.035), "musketeer": ("musketeer", 1, 0), "minions": ("minion", 3, 0.03), "knight": ("knight", 1, 0), "valkyrie": ("valkyrie", 1, 0),
+OUR_UNITS = {"archers": ("archer", 2, 0.035), "musketeer": ("musketeer", 1, 0), "minions": ("minion", 3, 0.03), "witch": ("witch", 1, 0), "knight": ("knight", 1, 0), "valkyrie": ("valkyrie", 1, 0),
              "mini-pekka": ("mini-pekka", 1, 0), "giant": ("giant", 1, 0), "cannon": ("cannon", 1, 0)}
 WINDOW = (1.05, 1.7)         # juste après le déploiement (~1 s) : unité apparue, pas encore partie
 
