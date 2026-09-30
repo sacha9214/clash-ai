@@ -26,19 +26,19 @@ DECK = {c.name: c for c in [
     Card("mini-pekka", 4, "troop", role="dps", units=("mini-pekka",)),
     Card("cannon", 3, "building", role="defense-building", units=("cannon",)),
     Card("musketeer", 4, "troop", "air+ground", role="dps", units=("musketeer",)),
-    Card("valkyrie", 4, "troop", role="splash", units=("valkyrie",)),
+    Card("witch", 5, "troop", "air+ground", role="splash", units=("witch", "skeleton")),
     Card("minions", 3, "troop", "air+ground", flying=True, role="swarm", units=("minion",)),
     Card("fireball", 4, "spell", "air+ground", role="spell-big", radius=0.11),
 ]}
 
 # Cartes connues hors deck (utile si on les remet)
 BENCH = {c.name: c for c in [
+    Card("valkyrie", 4, "troop", role="splash", units=("valkyrie",)),
     Card("archers", 3, "troop", "air+ground", role="dps", units=("archer",)),
     Card("arrows", 3, "spell", "air+ground", role="spell-small", radius=0.14),
     Card("spear-goblins", 2, "troop", "air+ground", role="swarm", units=("spear-goblin",)),
     # prête pour 1750 trophées (remplacera la Valkyrie) : tire en l'air, dégâts de zone, 4 squelettes par vague
     # qui occupent le P.E.K.K.A. Les squelettes sont listés comme NOS unités (pas pris pour des ennemis).
-    Card("witch", 5, "troop", "air+ground", role="splash", units=("witch", "skeleton")),
 ]}
 
 # Unités ennemies : ce qui compte pour choisir une réponse (valeurs approximatives)

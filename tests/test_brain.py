@@ -212,7 +212,7 @@ def test_lone_giant_is_answered_by_mini_pekka_not_the_cheapest_card():
     assert not Brain._duel("knight", [enemy("giant", 3, 19)], near_tower=False)[0]
 
 
-def test_evolved_goblin_barrel_gets_the_valkyrie_and_ui_bars_are_not_units():
+def test_evolved_goblin_barrel_gets_the_valkyrie_and_ui_bars_are_not_units(valk_deck):
     barrel = _FakeUnit("goblin-barrel-evolution", (100, 700, 140, 740), (0.0, 0.0))
     bar = _FakeUnit("skeleton-king-bar", (300, 300, 340, 310), (0.0, 0.0))
     seen = Brain.to_seen([barrel, bar], 578, 1280, None, fps=0)
@@ -377,7 +377,7 @@ def test_unknown_stats_threat_is_still_defended():
     assert d is not None and d.reason.startswith("défense")
 
 
-def test_air_attack_without_anti_air_gets_an_offset_decoy():
+def test_air_attack_without_anti_air_gets_an_offset_decoy(valk_deck):
     b = brain()
     t = enemy("mega-minion", 3, 22)
     d = b.decide([t], ["valkyrie", "giant", "cannon", "fireball"], ALL, 8.0, 100.0)
@@ -445,7 +445,7 @@ def test_pekka_read_as_his_mini_pekka_when_he_has_no_pekka():
     assert d is None or "pekka x" not in d.reason.replace("mini-pekka", "")
 
 
-def test_waits_a_moment_for_valkyrie_against_a_crowd():
+def test_waits_a_moment_for_valkyrie_against_a_crowd(valk_deck):
     b = brain()
     seen = [enemy("barbarian", 3, 20 + i % 2) for i in range(5)]
     d = b.decide(seen, ["musketeer", "mini-pekka", "valkyrie", "knight"], ALL, 3.0, 100.0)
@@ -488,7 +488,7 @@ def test_two_skeletons_still_left_to_the_tower():
     assert brain().decide(seen, ["musketeer", "knight", "giant", "cannon"], ALL, 6.0, 100.0) is None
 
 
-def test_first_real_goblin_barrel_answered_with_six_cards_known():
+def test_first_real_goblin_barrel_answered_with_six_cards_known(valk_deck):
     b = brain()
     b.opp_deck = ["knight", "giant", "musketeer", "minions", "valkyrie", "cannon"]   # 6 connues, pas le Tonneau
     barrel = Seen("goblin-barrel", True, *at(3, 24))
@@ -724,8 +724,8 @@ def test_hero_giant_is_treated_as_a_giant():
 def witch_deck(monkeypatch):
     """Deck prévu à 1750 trophées : la Sorcière à la place de la Valkyrie."""
     from clashai.cards import BENCH, DECK
-    monkeypatch.delitem(DECK, "valkyrie")
-    monkeypatch.setitem(DECK, "witch", BENCH["witch"])
+    monkeypatch.delitem(DECK, "valkyrie", raising=False)
+    monkeypatch.setitem(DECK, "witch", BENCH.get("witch") or DECK["witch"])
 
 
 def test_witch_defends_against_air_and_supports_the_giant(witch_deck):
@@ -736,3 +736,10 @@ def test_witch_defends_against_air_and_supports_the_giant(witch_deck):
     b.played(Decision("giant", 0, *at(3, 26), "attaque : Géant"), 90.0)
     d = b.decide([ours("giant", 3, 20, vy_tiles=-0.8)], ["witch", "knight", "cannon", "fireball"], ALL, 9.0, 100.0)
     assert d is not None and d.card == "witch" and d.reason.startswith("soutien")
+
+
+@pytest.fixture
+def valk_deck(monkeypatch):
+    """Valkyrie (deck jusqu'au 30/09, sur le banc depuis la Sorcière) : ses règles restent testées."""
+    from clashai.cards import BENCH, DECK
+    monkeypatch.setitem(DECK, "valkyrie", BENCH["valkyrie"])
