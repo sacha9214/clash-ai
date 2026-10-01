@@ -69,6 +69,7 @@ UNIT_CARD_ANY = {"pekka": "pekka", "golem": "golem", "giant": "giant", "mega-kni
                  "royal-giant": "royal-giant", "electro-giant": "electro-giant", "goblin-giant": "goblin-giant",
                  "giant-skeleton": "giant-skeleton", "ice-golem": "ice-golem", "lava-hound": "lava-hound",
                  "elixir-golem-big": "elixir-golem"}
+FIREBALL_MIN_VALUE = 5.0                    # élixir prévu minimum pour une Boule de feu (hors élixir plein)
 BARREL_FIRE_TILES = 6.0                     # Boule de feu sur le Tonneau seulement quand il est à < 6 cases de la tour
 WITCH_STUCK_S = 15.0                        # Sorcière en main depuis plus longtemps : on la pose au fond
 RANGED_SAFE = 4.5                           # un tireur est posé à >= 4,5 cases de tout ennemi (après 1,5 s d'avance)
@@ -546,6 +547,7 @@ class Brain:
         d = self._finish_tower(playable)
         if d:
             return d
+        self._elixir_now = elixir
         d = self._spells([e for e in enemies if e.name not in SPAWNERS], playable)
         if d:
             return d
@@ -768,7 +770,12 @@ class Brain:
             if card == "fireball" and n < 2 and self.p.get("fireball_patient") and not any(
                     _tile_dist(center[0], center[1], lx, ENEMY_TOWER_Y) < r for lx in LANES_X):
                 continue   # cible seule loin d'une tour : on attend qu'elle s'en approche ou qu'une 2e la rejoigne
-            if n >= min_count and value >= self.p.get("spell_value", 0.8) * DECK[card].cost:
+            need = self.p.get("spell_value", 0.8) * DECK[card].cost
+            if card == "fireball" and n >= 2 and getattr(self, "_elixir_now", 0.0) < 9.0:   # pas la cible seule tuée net
+                # APPRIS de nos 133 Boules de feu mesurées (01/10) : valeur prévue < 5 -> 1 tir sur 2 réussi, 30 % de
+                # ratés ; >= 5 -> 72 % ; >= 7 -> 90 %. On ne tire les « tout juste rentables » qu'à élixir plein.
+                need = max(need, FIREBALL_MIN_VALUE)
+            if n >= min_count and value >= need:
                 return Decision(card, playable[card], *center,
                                 f"{card} sur un groupe de {n} ({value:.1f} élixir détruits)", precise=True,
                                 trade=round(value - DECK[card].cost, 2))
