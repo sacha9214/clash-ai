@@ -522,7 +522,9 @@ class Brain:
             # sans Valkyrie : 3 gobelins sur la tour = des centaines de PV perdus. Une Boule de feu (4) contre le
             # Tonneau (3) est un échange un peu perdant mais bien moins cher que la tour (30/09, remarque de Sacha).
             lane_x = LANES_X[_lane(barrel.x)]
-            land = (lane_x + (0.05 if lane_x < 0.5 else -0.05), OWN_TOWER_Y - 0.03)   # les gobelins tombent devant la tour
+            # centre de la tour : les 3 gobelins atterrissent AUTOUR d'elle (01/10 : visée 1,7 case devant -> 1 ou 2
+            # gobelins touchés sur 3) ; notre sort n'abîme pas notre tour
+            land = (lane_x, OWN_TOWER_Y)
             if "fireball" in playable and _tile_dist(barrel.x, barrel.y, *land) > BARREL_FIRE_TILES:
                 return None     # trop tôt : notre Boule de feu (~1,5 s) tomberait avant le Tonneau (30/09 : 3 dans le vide)
             if "fireball" in playable:
