@@ -292,6 +292,7 @@ class Agent:
         self.det.tracker.reset() if self.det.tracker is not None else None
         log, last_play, gone, t_prev, n, refused = [], 0.0, None, time.time(), 0, 0
         self._emote_t0, self._emotes_done = time.time(), set()
+        self.timeline = []
         last_n, t_new = -1, time.time()
         while True:
             # une image NOUVELLE à chaque tour : sans ça, un flux figé ou coupé faisait tourner la boucle à 100 %
@@ -315,6 +316,12 @@ class Agent:
             self._emotes(dev, img, now)
             fps, t_prev = 1 / max(now - t_prev, 1e-3), now
             units, d, info, hand, el = self.think(img, now, fps)
+            if now - getattr(self, "_tl_t", 0) > 2.0:
+                # chronologie (toutes les 2 s) : PV des tours et élixir des deux côtés -> résultat réel des décisions
+                self._tl_t = now
+                self.timeline.append({"t": round(now, 2), "our_hp": [round(self.match.our_hp[l], 3) for l in (0, 1)],
+                                      "enemy_hp": [round(self.match.enemy_hp[l], 3) for l in (0, 1)],
+                                      "elixir": el, "opp_elixir": round(self.opp.elixir, 1)})
             t_show = time.perf_counter()
             self._show(img, units, d, info)
             # latence de chaque tour de boucle : âge de l'image, détection, reste de la réflexion, affichage
@@ -349,7 +356,10 @@ class Agent:
                             "units": [(u.name, u.enemy, u.center) for u in units],
                             # après les corrections de camp du cerveau (notre Géant lu « ennemi » ? -> visible ici)
                             "seen": [(s.name, s.enemy, round(s.x, 3), round(s.y, 3))
-                                     for s in getattr(self.brain, "last_seen", [])]})
+                                     for s in getattr(self.brain, "last_seen", [])],
+                            # PV des tours au moment du coup : pour apprendre ce que chaque décision a coûté/rapporté
+                            "our_hp": [round(self.match.our_hp[l], 3) for l in (0, 1)],
+                            "enemy_hp": [round(self.match.enemy_hp[l], 3) for l in (0, 1)]})
                 if ok:
                     last_play = time.time()
                     self.brain.played(d, last_play)   # le cerveau ne retient que les cartes vraiment posées
@@ -361,6 +371,9 @@ class Agent:
         _jobs.join()   # captures en attente écrites avant le résumé
         with open(os.path.join(folder, "perf.jsonl"), "w") as f:
             for row in self.perf_log:
+                f.write(json.dumps(row) + chr(10))
+        with open(os.path.join(folder, "timeline.jsonl"), "w") as f:
+            for row in self.timeline:
                 f.write(json.dumps(row) + chr(10))
         with open(os.path.join(folder, "spells.jsonl"), "w") as f:   # temps de vol mesurés de nos sorts
             for row in self.spells_log:
