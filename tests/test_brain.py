@@ -823,3 +823,12 @@ def test_our_giant_misnamed_pekka_next_to_it_is_dropped():
     s = [Seen("giant", False, 0.225, 0.472), Seen("pekka", True, 0.312, 0.498)]
     out = b._fix_sides(s, 100.0)
     assert not any(x.enemy for x in out)
+
+
+def test_cannon_kept_for_his_hog_rider():
+    b = brain()
+    b.opp_deck = ["hog-rider", "musketeer", "knight", "skeletons"]
+    d = b.decide([enemy("musketeer", 3, 20)], ["cannon", "knight", "minions", "giant"], ALL, 6.0, 100.0)
+    assert d is None or d.card != "cannon"
+    d = b.decide([enemy("hog-rider", 3, 18, vy_tiles=1.5)], ["cannon", "knight", "minions", "giant"], ALL, 6.0, 110.0)
+    assert d is not None and d.card == "cannon"

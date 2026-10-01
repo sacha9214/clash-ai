@@ -930,6 +930,8 @@ class Brain:
                 continue
             if self._swarm_doomed(card, t):
                 continue                # sa Sorcière / son Sorcier en retrait les souffle d'un coup
+            if card == "cannon" and set(self.opp_deck) & WIN_CONDITIONS and t.name not in WIN_CONDITIONS                     and not card_info.combat(t.name)["buildings_only"] and not self._tower_low(_lane(t.x)):
+                continue                # Canon réservé à son Cochon / Géant
             if card == "cannon" and (len(group) >= 3 or card_info.combat(t.name)["count"] >= 3):
                 continue                # le Canon tire sur 1 cible à la fois : inutile contre une nuée (29/09 : Barbares)
             if t.name in AIR_UNITS and not card_info.combat(card)["hits_air"]:
@@ -1044,7 +1046,9 @@ class Brain:
                                 precise=True, trade=self._trade("witch", group, near_tower, push_cost), push=push_cost)
         # une troupe VOLANTE que la menace ne peut pas toucher, et qui gagne : réponse parfaite, avant le Canon
         # (29/09 : P.E.K.K.A défendu 5 fois au Canon + Chevalier alors que nos Gargouilles le tuent sans perte)
-        if not is_air and not any(card_info.combat(g.name)["hits_air"] for g in group)                 and not any(r["hits_air"] for r in self._reachers(t)):      # personne en retrait qui tire en l'air
+        # (pas contre un fonceur de tours si le Canon est là : le Cochon ignore les Gargouilles et frappe la tour
+        # pendant qu'elles le grignotent — le Canon le détourne, 01/10)
+        if not is_air and not (t.name in FAST_BUILDING_HUNTERS and "cannon" in playable)                 and not any(card_info.combat(g.name)["hits_air"] for g in group)                 and not any(r["hits_air"] for r in self._reachers(t)):      # personne en retrait qui tire en l'air
             immune = {c: i for c, i in playable.items() if c in DECK and DECK[c].kind == "troop"
                       and card_info.combat(c)["flying"] and (self._duel(c, group, near_tower) or (False,))[0]}
             if immune:
@@ -1059,7 +1063,12 @@ class Brain:
                             f"défense : {t.name} x{len(group)} -> Mousquetaire évoluée derrière la tour (sniper le long du couloir)",
                             precise=True, trade=self._trade("musketeer", group, True, push_cost), push=push_cost)
         # Canon : le bâtiment au centre attire les tanks (Géant, Hog…) entre les deux tours
-        if "cannon" in playable and not is_air and (is_tank or t.name in FAST_BUILDING_HUNTERS or t.name in SINGLE_MELEE
+        # le Canon est RÉSERVÉ à sa carte qui fonce sur les tours (Cochon, Géant, Bélier…) s'il en a une : pas gaspillé
+        # sur une Mousquetaire 12 s avant le Cochon (01/10 : tour de 100 % à 56 % sur un passage)
+        hunters = set(self.opp_deck) & WIN_CONDITIONS
+        keep_cannon = bool(hunters) and not (is_tank or t.name in FAST_BUILDING_HUNTERS
+                                             or card_info.combat(t.name)["buildings_only"])             and not self._tower_low(_lane(t.x))
+        if "cannon" in playable and not keep_cannon and not is_air and (is_tank or t.name in FAST_BUILDING_HUNTERS or t.name in SINGLE_MELEE
                                                      or _cost(t.name) >= 3)                 and len(group) < 3 and card_info.combat(t.name)["count"] < 3:
             # pas contre les nuées (5 Barbares) : le Canon tire sur 1 cible à la fois. D'après la CARTE, pas d'après ce
             # que voit le scanner (29/09 : 1 Barbare vu sur 5 -> Canon posé 4 fois)
